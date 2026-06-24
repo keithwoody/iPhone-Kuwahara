@@ -37,7 +37,7 @@ final class CameraManager: NSObject, ObservableObject {
             session.addOutput(videoOutput)
         }
 
-        videoOutput.connection(with: .video)?.videoRotationAngle = 90
+        videoOutput.connection(with: .video)?.videoOrientation = .portrait
 
         session.commitConfiguration()
     }
