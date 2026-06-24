@@ -14,6 +14,7 @@
 		BD89BCF112404A498A715F07 /* MetalRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F08 /* MetalRenderer.swift */; };
 		BD89BCF112404A498A715F09 /* SRTStreamer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F0A /* SRTStreamer.swift */; };
 		BD89BCF112404A498A715F0B /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F0C /* Shaders.metal */; };
+		BD89BCF1AABB00001234FF03 /* SRTHaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = BD89BCF1AABB00001234FF02 /* SRTHaishinKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +34,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BD89BCF1AABB00001234FF03 /* HaishinKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -85,6 +87,9 @@
 			);
 			dependencies = (
 			);
+			packageProductDependencies = (
+				BD89BCF1AABB00001234FF02 /* HaishinKit */,
+			);
 			name = KuwaharaLive;
 			productName = KuwaharaLive;
 			productReference = BD89BCF112404A498A715F11 /* KuwaharaLive.app */;
@@ -119,6 +124,9 @@
 			projectRoot = "";
 			targets = (
 				BD89BCF112404A498A715F16 /* KuwaharaLive */,
+			);
+			packageReferences = (
+				BD89BCF1AABB00001234FF01 /* XCRemoteSwiftPackageReference "HaishinKit.swift" */,
 			);
 		};
 /* End PBXProject section */
@@ -344,6 +352,21 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		BD89BCF1AABB00001234FF01 /* XCLocalSwiftPackageReference "HaishinKit.swift" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../HaishinKitLocal";
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		BD89BCF1AABB00001234FF02 /* SRTHaishinKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BD89BCF1AABB00001234FF01 /* XCLocalSwiftPackageReference "HaishinKit.swift" */;
+			productName = SRTHaishinKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = BD89BCF112404A498A715F1A /* Project object */;
 }

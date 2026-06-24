@@ -176,6 +176,7 @@ struct ContentView: View {
 
     private func stopStream() {
         isStreaming = false
+        camera.previewView?.onProcessedFrame = nil
         streamer.disconnect()
     }
 }

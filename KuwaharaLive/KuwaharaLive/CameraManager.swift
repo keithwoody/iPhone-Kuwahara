@@ -130,6 +130,7 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
                        didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        previewView?.currentPresentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         previewView?.render(pixelBuffer: pixelBuffer)
         onFrame?(pixelBuffer)
     }

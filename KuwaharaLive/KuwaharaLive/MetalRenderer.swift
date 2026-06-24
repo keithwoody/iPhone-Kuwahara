@@ -1,6 +1,7 @@
 import Metal
 import MetalKit
 import CoreVideo
+import CoreMedia
 
 // Must stay byte-for-byte in sync with the KuwaharaParams struct in Shaders.metal.
 struct KuwaharaParams {
@@ -26,6 +27,10 @@ final class MetalPreviewView: MTKView {
     var sharpness: Float      = 8.0
     var hardness: Float       = 8.0
     var passes: Int           = 1     // 1–4 Kuwahara passes; more = stronger painterly effect
+
+    // Streaming support: set by SRTStreamer, called from Metal completion handler
+    var onProcessedFrame: ((CVPixelBuffer, CMTime) -> Void)?
+    var currentPresentationTime: CMTime = .zero
 
     override init(frame: CGRect, device: MTLDevice?) {
         let gpu = device ?? MTLCreateSystemDefaultDevice()
@@ -100,9 +105,6 @@ final class MetalPreviewView: MTKView {
         else { return }
 
         // ── Pass 1: downsample full-res → half-res ────────────────────────────
-        // 2×2 box filter reduces the pixel count to ¼. The Kuwahara kernel then
-        // runs at half the radius to match the same visual coverage, giving ~15×
-        // less total compute than a full-res pass at the original radius.
         let halfDesc = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .bgra8Unorm, width: halfW, height: halfH, mipmapped: false)
         halfDesc.usage = [.shaderRead, .shaderWrite]
@@ -122,8 +124,6 @@ final class MetalPreviewView: MTKView {
         }
 
         // ── Pass 2+: Kuwahara on the half-res texture (multi-pass ping-pong) ───
-        // Two textures alternate as input/output across passes. Each pass feeds
-        // its output into the next pass as input, building up the painterly effect.
         let pingDesc = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .bgra8Unorm, width: halfW, height: halfH, mipmapped: false)
         pingDesc.usage = [.shaderRead, .shaderWrite]
@@ -160,6 +160,31 @@ final class MetalPreviewView: MTKView {
                 enc.endEncoding()
             }
             inputTex = outputTex
+        }
+
+        // ── Register streaming completion handler (must be before commit) ─────
+        // pingTex/pongTex are new allocations each frame, so inputTex is unique
+        // to this command buffer — safe to read in the completion handler.
+        if let callback = onProcessedFrame {
+            let capturedTex = inputTex
+            let pts = currentPresentationTime
+            let capW = halfW, capH = halfH
+            commandBuffer.addCompletedHandler { _ in
+                var pb: CVPixelBuffer?
+                CVPixelBufferCreate(kCFAllocatorDefault, capW, capH,
+                                   kCVPixelFormatType_32BGRA, nil, &pb)
+                guard let pb else { return }
+                CVPixelBufferLockBaseAddress(pb, [])
+                if let base = CVPixelBufferGetBaseAddress(pb) {
+                    capturedTex.getBytes(base,
+                                        bytesPerRow: CVPixelBufferGetBytesPerRow(pb),
+                                        from: MTLRegion(origin: MTLOrigin(x: 0, y: 0, z: 0),
+                                                       size: MTLSize(width: capW, height: capH, depth: 1)),
+                                        mipmapLevel: 0)
+                }
+                CVPixelBufferUnlockBaseAddress(pb, [])
+                callback(pb, pts)
+            }
         }
 
         // ── Blit final pass result → half-res drawable ────────────────────────
