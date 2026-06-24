@@ -13,11 +13,9 @@
 		BD89BCF112404A498A715F07 /* MetalRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F08 /* MetalRenderer.swift */; };
 		BD89BCF112404A498A715F09 /* SRTStreamer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F0A /* SRTStreamer.swift */; };
 		BD89BCF112404A498A715F0B /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F0C /* Shaders.metal */; };
-		BD89BCF112404A498A715F0D /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F0E /* Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		BD89BCF112404A498A715F11 /* KuwaharaLive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KuwaharaLive.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BD89BCF112404A498A715F02 /* KuwaharaLiveApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KuwaharaLiveApp.swift; sourceTree = "<group>"; };
 		BD89BCF112404A498A715F04 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		BD89BCF112404A498A715F06 /* CameraManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraManager.swift; sourceTree = "<group>"; };
@@ -25,6 +23,7 @@
 		BD89BCF112404A498A715F0A /* SRTStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SRTStreamer.swift; sourceTree = "<group>"; };
 		BD89BCF112404A498A715F0C /* Shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shaders.metal; sourceTree = "<group>"; };
 		BD89BCF112404A498A715F0E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		BD89BCF112404A498A715F11 /* KuwaharaLive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KuwaharaLive.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -38,20 +37,12 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		BD89BCF112404A498A715F13 /* Root */ = {
+		BD89BCF112404A498A715F13 = {
 			isa = PBXGroup;
 			children = (
 				BD89BCF112404A498A715F14 /* KuwaharaLive */,
 				BD89BCF112404A498A715F15 /* Products */,
 			);
-			sourceTree = "<group>";
-		};
-		BD89BCF112404A498A715F15 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				BD89BCF112404A498A715F11 /* KuwaharaLive.app */,
-			);
-			name = Products;
 			sourceTree = "<group>";
 		};
 		BD89BCF112404A498A715F14 /* KuwaharaLive */ = {
@@ -66,6 +57,14 @@
 				BD89BCF112404A498A715F0E /* Info.plist */,
 			);
 			path = KuwaharaLive;
+			sourceTree = "<group>";
+		};
+		BD89BCF112404A498A715F15 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				BD89BCF112404A498A715F11 /* KuwaharaLive.app */,
+			);
+			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -96,7 +95,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1500;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 1620;
 				TargetAttributes = {
 					BD89BCF112404A498A715F16 = {
 						CreatedOnToolsVersion = 15.0;
@@ -111,7 +110,7 @@
 				en,
 				Base,
 			);
-			mainGroup = BD89BCF112404A498A715F13 /* Root */;
+			mainGroup = BD89BCF112404A498A715F13;
 			productRefGroup = BD89BCF112404A498A715F15 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -126,7 +125,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BD89BCF112404A498A715F0D /* Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -173,6 +171,7 @@
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
 				CLANG_WARN_OBJC_IMPLICIT_RETAIN_CYCLE = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
@@ -235,6 +234,7 @@
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
 				CLANG_WARN_OBJC_IMPLICIT_RETAIN_CYCLE = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
@@ -271,16 +271,17 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = HGQR3CVHL6;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = KuwaharaLive/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourteam.KuwaharaLive;
+				PRODUCT_BUNDLE_IDENTIFIER = com.keithwoody.KuwaharaLive;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
@@ -297,16 +298,17 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = HGQR3CVHL6;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = KuwaharaLive/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourteam.KuwaharaLive;
+				PRODUCT_BUNDLE_IDENTIFIER = com.keithwoody.KuwaharaLive;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
@@ -319,15 +321,6 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		BD89BCF112404A498A715F1B /* Build configuration list for PBXProject "KuwaharaLive" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				BD89BCF112404A498A715F1D /* Debug */,
-				BD89BCF112404A498A715F1E /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		BD89BCF112404A498A715F17 /* Build configuration list for PBXNativeTarget "KuwaharaLive" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -337,8 +330,16 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		BD89BCF112404A498A715F1B /* Build configuration list for PBXProject "KuwaharaLive" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BD89BCF112404A498A715F1D /* Debug */,
+				BD89BCF112404A498A715F1E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
-
 	};
 	rootObject = BD89BCF112404A498A715F1A /* Project object */;
 }
