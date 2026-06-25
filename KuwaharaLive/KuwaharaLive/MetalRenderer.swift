@@ -195,14 +195,21 @@ final class MetalPreviewView: MTKView {
         }
 
         // ── Streaming: blit final pass → IOSurface-backed buffer (no CPU copy) ─
+        // Always outputs landscape 16:9. In portrait mode, center-crop a 16:9
+        // slice from the taller half-res buffer instead of sending the full frame.
         if onProcessedFrame != nil {
-            ensureStreamingBuffer(width: halfW, height: halfH)
+            let isPortrait = halfH > halfW
+            let streamW = halfW
+            let streamH = isPortrait ? (((halfW * 9 + 15) / 16) / 2) * 2 : halfH
+            let streamYOffset = isPortrait ? (halfH - streamH) / 2 : 0
+
+            ensureStreamingBuffer(width: streamW, height: streamH)
             if let streamTex = streamingTexture,
                let blit = commandBuffer.makeBlitCommandEncoder() {
                 blit.copy(from: inputTex,
                           sourceSlice: 0, sourceLevel: 0,
-                          sourceOrigin: .init(x: 0, y: 0, z: 0),
-                          sourceSize:   .init(width: halfW, height: halfH, depth: 1),
+                          sourceOrigin: .init(x: 0, y: streamYOffset, z: 0),
+                          sourceSize:   .init(width: streamW, height: streamH, depth: 1),
                           to: streamTex,
                           destinationSlice: 0, destinationLevel: 0,
                           destinationOrigin: .init(x: 0, y: 0, z: 0))

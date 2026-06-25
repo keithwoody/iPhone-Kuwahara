@@ -8,42 +8,259 @@ struct ContentView: View {
     @State private var host = "192.168.1.20"
     @State private var port = "5000"
     @State private var isStreaming = false
+    @State private var controlsCollapsed = false
 
-    // Kuwahara filter controls
     @State private var kuwaharaEnabled = true
-    @State private var kernelRadius: Double = 9    // 4–16 in half-res pixels (≈ 8–32 at full-res)
-    @State private var passes: Int = 1             // 1–4
-    @State private var sharpness: Double = 8.0     // q: 1–18
-    @State private var hardness: Double = 8.0      // 1–25
+    @State private var kernelRadius: Double = 9
+    @State private var passes: Int = 1
+    @State private var sharpness: Double = 8.0
+    @State private var hardness: Double = 8.0
+    @State private var frameRate: Int = 30
+
+    @FocusState private var focusedField: Field?
+    enum Field { case host, port }
+
+    // MARK: - Root layout
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
+        GeometryReader { geo in
+            let isLandscape = geo.size.width > geo.size.height
+            ZStack {
+                Color.black
+                if isLandscape {
+                    landscapeLayout(geo: geo)
+                } else {
+                    portraitLayout
+                }
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.85), value: controlsCollapsed)
+        }
+        .ignoresSafeArea()
+        .onAppear { camera.start() }
+        .onDisappear { camera.stop() }
+    }
 
-            VStack(spacing: 0) {
-                CameraPreview(
-                    camera: camera,
-                    kuwaharaEnabled: kuwaharaEnabled,
-                    kernelRadius: Int(kernelRadius),
-                    passes: passes,
-                    sharpness: Float(sharpness),
-                    hardness: Float(hardness)
-                )
+    // MARK: - Landscape: camera left 2/3, controls right 1/3
+
+    private func landscapeLayout(geo: GeometryProxy) -> some View {
+        HStack(spacing: 0) {
+            cameraPreviewView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onTapGesture { focusedField = nil }
+                .overlay(alignment: .bottomLeading) {
+                    if camera.availableSources.count > 1 {
+                        lensPickerView.padding(16)
+                    }
+                }
+                .overlay(alignment: .trailing) {
+                    if controlsCollapsed {
+                        Button { withAnimation { controlsCollapsed = false } } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding(10)
+                                .background(.ultraThinMaterial, in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.trailing, 8)
+                    }
+                }
+
+            if !controlsCollapsed {
+                VStack(spacing: 0) {
+                    // Collapse handle
+                    Button {
+                        withAnimation { controlsCollapsed = true; focusedField = nil }
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    Divider()
+
+                    ScrollView(.vertical, showsIndicators: false) {
+                        sharedControlContent
+                            .padding()
+                    }
+                }
+                .frame(width: geo.size.width / 3)
+                .background(.ultraThinMaterial)
+            }
+        }
+    }
+
+    // MARK: - Portrait: camera top, controls bottom
+
+    private var portraitLayout: some View {
+        VStack(spacing: 0) {
+            cameraPreviewView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea(edges: .top)
+                .onTapGesture { focusedField = nil }
                 .overlay(alignment: .bottom) {
                     if camera.availableSources.count > 1 {
                         lensPickerView.padding(.bottom, 16)
                     }
                 }
 
-                controlPanel
+            VStack(spacing: 0) {
+                // Collapse handle
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        controlsCollapsed.toggle()
+                        if controlsCollapsed { focusedField = nil }
+                    }
+                } label: {
+                    VStack(spacing: 3) {
+                        RoundedRectangle(cornerRadius: 2.5)
+                            .fill(Color.secondary.opacity(0.4))
+                            .frame(width: 36, height: 5)
+                        Image(systemName: controlsCollapsed ? "chevron.up" : "chevron.down")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if !controlsCollapsed {
+                    sharedControlContent
+                        .padding(.bottom, 8)
+                }
             }
+            .background(.ultraThinMaterial)
         }
-        .onAppear { camera.start() }
-        .onDisappear { camera.stop() }
     }
 
-    // MARK: - Lens picker overlay
+    // MARK: - Shared control content
+
+    private var sharedControlContent: some View {
+        VStack(spacing: 0) {
+            // ── Kuwahara toggle ──────────────────────────────────────────────
+            Toggle(isOn: $kuwaharaEnabled) {
+                Label("Kuwahara Filter", systemImage: "paintpalette")
+                    .font(.subheadline.weight(.medium))
+            }
+            .tint(.purple)
+            .padding(.top, 8)
+            .padding(.bottom, kuwaharaEnabled ? 8 : 0)
+
+            // ── Parameter sliders ────────────────────────────────────────────
+            if kuwaharaEnabled {
+                Divider()
+
+                VStack(spacing: 14) {
+                    KuwaharaSlider(label: "Radius",
+                                   value: $kernelRadius, range: 4...16, step: 1, format: "%.0f")
+                    KuwaharaSlider(
+                        label: "Passes",
+                        value: Binding(get: { Double(passes) }, set: { passes = Int($0) }),
+                        range: 1...4, step: 1, format: "%.0f")
+                    KuwaharaSlider(label: "Sharpness",
+                                   value: $sharpness, range: 1...18, step: 0.5, format: "%.1f")
+                    KuwaharaSlider(label: "Hardness",
+                                   value: $hardness, range: 1...25, step: 1, format: "%.0f")
+                }
+                .padding(.top, 12)
+                .padding(.bottom, 4)
+            }
+
+            Divider().padding(.top, 8)
+
+            // ── Frame rate ───────────────────────────────────────────────────
+            HStack {
+                Text("Frame rate").font(.subheadline.weight(.medium))
+                Spacer()
+                Picker("Frame rate", selection: $frameRate) {
+                    Text("15 fps").tag(15)
+                    Text("24 fps").tag(24)
+                    Text("30 fps").tag(30)
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+            }
+            .padding(.vertical, 8)
+            .onChange(of: frameRate) { fps in
+                camera.setFrameRate(fps)
+                streamer.frameRate = fps
+            }
+
+            Divider()
+
+            // ── Stream controls ──────────────────────────────────────────────
+            VStack(spacing: 12) {
+                HStack(spacing: 8) {
+                    TextField("Host / IP", text: $host)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.numbersAndPunctuation)
+                        .autocorrectionDisabled()
+                        .focused($focusedField, equals: .host)
+                        .submitLabel(.next)
+                        .onSubmit { focusedField = .port }
+
+                    TextField("Port", text: $port)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.numberPad)
+                        .frame(width: 72)
+                        .focused($focusedField, equals: .port)
+                }
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") { focusedField = nil }
+                    }
+                }
+
+                Button {
+                    isStreaming ? stopStream() : startStream()
+                } label: {
+                    Label(
+                        isStreaming ? "Stop" : "Start Stream",
+                        systemImage: isStreaming ? "stop.circle.fill" : "dot.radiowaves.left.and.right"
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(isStreaming ? .red : .blue)
+                .disabled(host.isEmpty)
+
+                if let status = streamer.statusMessage {
+                    Text(status)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .padding(.top, 12)
+        }
+    }
+
+    // MARK: - Camera preview
+
+    private var cameraPreviewView: some View {
+        CameraPreview(
+            camera: camera,
+            kuwaharaEnabled: kuwaharaEnabled,
+            kernelRadius: Int(kernelRadius),
+            passes: passes,
+            sharpness: Float(sharpness),
+            hardness: Float(hardness)
+        )
+    }
+
+    // MARK: - Lens picker
 
     private var lensPickerView: some View {
         HStack(spacing: 6) {
@@ -67,106 +284,7 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Control panel
-
-    private var controlPanel: some View {
-        VStack(spacing: 0) {
-            // ── Kuwahara toggle ──────────────────────────────────────────────
-            Toggle(isOn: $kuwaharaEnabled) {
-                Label("Kuwahara Filter", systemImage: "paintpalette")
-                    .font(.subheadline.weight(.medium))
-            }
-            .tint(.purple)
-            .padding(.horizontal)
-            .padding(.top, 16)
-            .padding(.bottom, kuwaharaEnabled ? 8 : 16)
-
-            // ── Parameter sliders (only when filter is on) ───────────────────
-            if kuwaharaEnabled {
-                Divider().padding(.horizontal)
-
-                VStack(spacing: 14) {
-                    KuwaharaSlider(
-                        label: "Radius",
-                        value: $kernelRadius,
-                        range: 4...16,
-                        step: 1,
-                        format: "%.0f",
-                        tip: "Radius in half-res pixels (×2 = full-res equivalent)"
-                    )
-
-                    KuwaharaSlider(
-                        label: "Passes",
-                        value: Binding(get: { Double(passes) }, set: { passes = Int($0) }),
-                        range: 1...4,
-                        step: 1,
-                        format: "%.0f",
-                        tip: "More passes = stronger painterly effect"
-                    )
-
-                    KuwaharaSlider(
-                        label: "Sharpness",
-                        value: $sharpness,
-                        range: 1...18,
-                        step: 0.5,
-                        format: "%.1f",
-                        tip: "Higher = crisper stroke edges"
-                    )
-
-                    KuwaharaSlider(
-                        label: "Hardness",
-                        value: $hardness,
-                        range: 1...25,
-                        step: 1,
-                        format: "%.0f",
-                        tip: "Higher = more aggressive region separation"
-                    )
-                }
-                .padding(.horizontal)
-                .padding(.top, 12)
-                .padding(.bottom, 4)
-
-                Divider().padding(.horizontal)
-            }
-
-            // ── Stream controls ──────────────────────────────────────────────
-            VStack(spacing: 12) {
-                HStack(spacing: 8) {
-                    TextField("OBS host / IP", text: $host)
-                        .textFieldStyle(.roundedBorder)
-                        .keyboardType(.numbersAndPunctuation)
-                        .autocorrectionDisabled()
-
-                    TextField("Port", text: $port)
-                        .textFieldStyle(.roundedBorder)
-                        .keyboardType(.numberPad)
-                        .frame(width: 80)
-                }
-
-                Button {
-                    isStreaming ? stopStream() : startStream()
-                } label: {
-                    Label(
-                        isStreaming ? "Stop" : "Start Stream",
-                        systemImage: isStreaming ? "stop.circle.fill" : "dot.radiowaves.left.and.right"
-                    )
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(isStreaming ? .red : .blue)
-                .disabled(host.isEmpty)
-
-                if let status = streamer.statusMessage {
-                    Text(status)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding()
-        }
-        .background(.ultraThinMaterial)
-    }
+    // MARK: - Stream control
 
     private func startStream() {
         guard let portNum = UInt16(port) else { return }
@@ -181,7 +299,7 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Reusable thumb-friendly slider row
+// MARK: - Slider row
 
 private struct KuwaharaSlider: View {
     let label: String
@@ -189,13 +307,11 @@ private struct KuwaharaSlider: View {
     let range: ClosedRange<Double>
     let step: Double
     let format: String
-    let tip: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(label)
-                    .font(.subheadline.weight(.medium))
+                Text(label).font(.subheadline.weight(.medium))
                 Spacer()
                 Text(String(format: format, value))
                     .font(.subheadline.monospacedDigit())
@@ -204,7 +320,6 @@ private struct KuwaharaSlider: View {
             }
             Slider(value: $value, in: range, step: step)
                 .tint(.purple)
-                // Explicit frame height gives a larger thumb hit-target on small fingers
                 .frame(height: 28)
         }
     }

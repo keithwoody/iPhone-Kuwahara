@@ -1,6 +1,7 @@
 import AVFoundation
 import CoreVideo
 import Combine
+import UIKit
 
 struct CameraSource: Identifiable, Equatable {
     let id: String
@@ -49,6 +50,19 @@ final class CameraManager: NSObject, ObservableObject {
 
     @Published var availableSources: [CameraSource] = []
     @Published var currentSource: CameraSource?
+    @Published var currentHalfResSize: CGSize = CGSize(width: 960, height: 540)
+
+    // Always 16:9 landscape (the dimensions the stream encoder will see).
+    var currentStreamSize: CGSize {
+        let h = currentHalfResSize
+        if h.height > h.width {  // portrait: center-crop to 16:9
+            var cropH = (h.width * 9.0 / 16.0).rounded()
+            if cropH.truncatingRemainder(dividingBy: 2) != 0 { cropH -= 1 }
+            return CGSize(width: h.width, height: cropH)
+        }
+        return h
+    }
+    private(set) var frameRate: Int = 30
 
     weak var previewView: MetalPreviewView?
     var onFrame: ((CVPixelBuffer) -> Void)?
@@ -66,6 +80,15 @@ final class CameraManager: NSObject, ObservableObject {
             $0.device.deviceType == .builtInWideAngleCamera && $0.device.position == .back
         }) ?? availableSources.first
         configure(with: defaultSource)
+
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(handleOrientationChange),
+            name: UIDevice.orientationDidChangeNotification, object: nil)
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(
+            self, name: UIDevice.orientationDidChangeNotification, object: nil)
     }
 
     func switchTo(_ source: CameraSource) {
@@ -94,26 +117,29 @@ final class CameraManager: NSObject, ObservableObject {
         }
 
         if let connection = videoOutput.connection(with: .video) {
-            if #available(iOS 17.0, *) {
-                connection.videoRotationAngle = 90
-            } else {
-                connection.videoOrientation = .portrait
-            }
+            applyRotation(to: connection)
         }
 
         session.commitConfiguration()
 
-        // Pin to 30 fps after committing so the device has an active format.
-        // The Kuwahara compute shader is expensive; 60 fps halves the GPU budget per frame.
-        if let device = source?.device, (try? device.lockForConfiguration()) != nil {
-            let fps30 = CMTime(value: 1, timescale: 30)
-            device.activeVideoMinFrameDuration = fps30
-            device.activeVideoMaxFrameDuration = fps30
-            device.unlockForConfiguration()
-        }
+        applyFrameRate(to: source?.device)
+    }
+
+    func setFrameRate(_ fps: Int) {
+        frameRate = fps
+        applyFrameRate(to: currentSource?.device)
+    }
+
+    private func applyFrameRate(to device: AVCaptureDevice?) {
+        guard let device, (try? device.lockForConfiguration()) != nil else { return }
+        let duration = CMTime(value: 1, timescale: CMTimeScale(frameRate))
+        device.activeVideoMinFrameDuration = duration
+        device.activeVideoMaxFrameDuration = duration
+        device.unlockForConfiguration()
     }
 
     func start() {
+        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
         guard AVCaptureDevice.authorizationStatus(for: .video) != .denied else { return }
         AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
             if granted { self?.session.startRunning() }
@@ -122,6 +148,49 @@ final class CameraManager: NSObject, ObservableObject {
 
     func stop() {
         session.stopRunning()
+        UIDevice.current.endGeneratingDeviceOrientationNotifications()
+    }
+
+    // MARK: - Orientation
+
+    @objc private func handleOrientationChange() {
+        let orientation = UIDevice.current.orientation
+        guard orientation.isValidInterfaceOrientation else { return }
+        if let connection = videoOutput.connection(with: .video) {
+            applyRotation(to: connection)
+        }
+    }
+
+    private func applyRotation(to connection: AVCaptureConnection) {
+        let orientation = UIDevice.current.orientation
+        if #available(iOS 17.0, *) {
+            connection.videoRotationAngle = rotationAngle(for: orientation)
+        } else {
+            connection.videoOrientation = legacyOrientation(for: orientation)
+        }
+        let isLandscape = orientation == .landscapeLeft || orientation == .landscapeRight
+        currentHalfResSize = isLandscape
+            ? CGSize(width: 960, height: 540)
+            : CGSize(width: 540, height: 960)
+    }
+
+    // LandscapeLeft = home on right = camera sensor's natural landscape orientation
+    private func rotationAngle(for orientation: UIDeviceOrientation) -> Double {
+        switch orientation {
+        case .landscapeLeft:      return 0
+        case .landscapeRight:     return 180
+        case .portraitUpsideDown: return 270
+        default:                  return 90
+        }
+    }
+
+    private func legacyOrientation(for orientation: UIDeviceOrientation) -> AVCaptureVideoOrientation {
+        switch orientation {
+        case .landscapeLeft:      return .landscapeRight  // intentionally swapped
+        case .landscapeRight:     return .landscapeLeft   // intentionally swapped
+        case .portraitUpsideDown: return .portraitUpsideDown
+        default:                  return .portrait
+        }
     }
 }
 
