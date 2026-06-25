@@ -9,6 +9,8 @@ import VideoToolbox
 final class SRTStreamer: ObservableObject {
     @Published var statusMessage: String? = nil
 
+    var frameRate: Int = 30
+
     private let connection = SRTConnection()
     private var srtStream: SRTStream?
 
@@ -17,14 +19,16 @@ final class SRTStreamer: ObservableObject {
         let stream = SRTStream(connection: connection)
         srtStream = stream
 
+        let capturedRate = frameRate
+        let capturedSize = camera.currentStreamSize
         Task {
-            // Video-only stream at half-res (camera is 1920×1080, we send 960×540)
             try? await stream.setVideoSettings(VideoCodecSettings(
-                videoSize: CGSize(width: 960, height: 540),
+                videoSize: capturedSize,
                 bitRate: 3_000_000,
                 profileLevel: kVTProfileLevel_H264_Baseline_AutoLevel as String,
                 maxKeyFrameIntervalDuration: 2,
-                isLowLatencyRateControlEnabled: true
+                isLowLatencyRateControlEnabled: true,
+                expectedFrameRate: Double(capturedRate)
             ))
             await stream.setExpectedMedias([.video])
 
@@ -35,10 +39,9 @@ final class SRTStreamer: ObservableObject {
                 statusMessage = "Streaming → \(host):\(port)"
 
                 // Wire the Metal completion handler to feed frames into the stream.
-                // The closure captures `stream` (an actor) but NOT `self` to avoid
-                // requiring MainActor from the Metal background completion queue.
+                // Capture rate (not self) so the closure is safe on any thread.
                 camera.previewView?.onProcessedFrame = { pixelBuffer, pts in
-                    SRTStreamer.submitFrame(pixelBuffer, at: pts, to: stream)
+                    SRTStreamer.submitFrame(pixelBuffer, at: pts, frameRate: capturedRate, to: stream)
                 }
             } catch {
                 statusMessage = "Failed: \(error.localizedDescription)"
@@ -59,10 +62,11 @@ final class SRTStreamer: ObservableObject {
     private nonisolated static func submitFrame(
         _ pixelBuffer: CVPixelBuffer,
         at pts: CMTime,
+        frameRate: Int,
         to stream: SRTStream
     ) {
         var timing = CMSampleTimingInfo(
-            duration: CMTime(value: 1, timescale: 30),
+            duration: CMTime(value: 1, timescale: CMTimeScale(frameRate)),
             presentationTimeStamp: pts,
             decodeTimeStamp: .invalid)
         var formatDesc: CMVideoFormatDescription?
