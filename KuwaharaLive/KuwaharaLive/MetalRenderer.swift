@@ -5,12 +5,12 @@ import CoreMedia
 
 // Must stay byte-for-byte in sync with the KuwaharaParams struct in Shaders.metal.
 struct KuwaharaParams {
-    var kernelRadius: Int32  = 5       // half-width of sampling window in half-res pixels
-    var N: Int32             = 8       // always 8 sectors
-    var q: Float             = 8.0    // sharpness of variance suppression
-    var hardness: Float      = 8.0    // scale in variance weighting denominator
-    var zeroCrossing: Float  = 0.58   // sector-boundary angle (radians)
-    var zeta: Float          = 0      // computed as 2/kernelRadius in draw()
+    var kernelRadius: Int32  = 5
+    var N: Int32             = 8
+    var q: Float             = 8.0
+    var hardness: Float      = 8.0
+    var zeroCrossing: Float  = 0.58
+    var zeta: Float          = 0
     var enabled: UInt32      = 1
 }
 
@@ -19,16 +19,22 @@ final class MetalPreviewView: MTKView {
     private var computePipeline: MTLComputePipelineState?
     private var downsamplePipeline: MTLComputePipelineState?
     private var textureCache: CVMetalTextureCache?
+    private var pool: TexturePool?
     private var currentPixelBuffer: CVPixelBuffer?
+    private var lastHalfSize: (Int, Int) = (0, 0)
 
-    // Tunable from ContentView via CameraPreview.updateUIView
+    // Streaming: IOSurface-backed buffer so the GPU can blit into it directly
+    // and the completion handler can hand it to SRTStreamer without a CPU copy.
+    private var streamingPixelBuffer: CVPixelBuffer?
+    private var streamingCVTexture: CVMetalTexture?  // keeps the cache entry alive
+    private var streamingTexture: MTLTexture?
+
     var kuwaharaEnabled: Bool = true
-    var kernelRadius: Int     = 9     // radius in half-res pixels (≈ 2× in full-res units)
+    var kernelRadius: Int     = 9
     var sharpness: Float      = 8.0
     var hardness: Float       = 8.0
-    var passes: Int           = 1     // 1–4 Kuwahara passes; more = stronger painterly effect
+    var passes: Int           = 1
 
-    // Streaming support: set by SRTStreamer, called from Metal completion handler
     var onProcessedFrame: ((CVPixelBuffer, CMTime) -> Void)?
     var currentPresentationTime: CMTime = .zero
 
@@ -48,6 +54,7 @@ final class MetalPreviewView: MTKView {
         guard let gpu = self.device else { return }
 
         commandQueue = gpu.makeCommandQueue()
+        pool = TexturePool(device: gpu)
         CVMetalTextureCacheCreate(nil, nil, gpu, nil, &textureCache)
 
         guard let library = gpu.makeDefaultLibrary() else { return }
@@ -68,24 +75,51 @@ final class MetalPreviewView: MTKView {
     }
 
     func render(pixelBuffer: CVPixelBuffer) {
-        // Pin the drawable to half the camera buffer size so CAMetalLayer
-        // handles upscaling to fill the screen automatically.
         let w = CVPixelBufferGetWidth(pixelBuffer)
         let h = CVPixelBufferGetHeight(pixelBuffer)
         let targetSize = CGSize(width: w / 2, height: h / 2)
         if drawableSize != targetSize { drawableSize = targetSize }
-
         currentPixelBuffer = pixelBuffer
         draw()
     }
 
+    // Builds (or rebuilds) the IOSurface-backed streaming buffer + wrapped MTLTexture.
+    private func ensureStreamingBuffer(width: Int, height: Int) {
+        guard streamingPixelBuffer == nil ||
+              CVPixelBufferGetWidth(streamingPixelBuffer!) != width ||
+              CVPixelBufferGetHeight(streamingPixelBuffer!) != height
+        else { return }
+
+        streamingPixelBuffer = nil
+        streamingCVTexture   = nil
+        streamingTexture     = nil
+
+        let attrs: [CFString: Any] = [
+            kCVPixelBufferMetalCompatibilityKey: true,
+            kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary
+        ]
+        var pb: CVPixelBuffer?
+        CVPixelBufferCreate(kCFAllocatorDefault, width, height,
+                            kCVPixelFormatType_32BGRA, attrs as CFDictionary, &pb)
+        guard let pb, let cache = textureCache else { return }
+
+        var cvTex: CVMetalTexture?
+        CVMetalTextureCacheCreateTextureFromImage(
+            nil, cache, pb, nil, .bgra8Unorm, width, height, 0, &cvTex)
+        guard let cvTex else { return }
+
+        streamingPixelBuffer = pb
+        streamingCVTexture   = cvTex
+        streamingTexture     = CVMetalTextureGetTexture(cvTex)
+    }
+
     override func draw(_ rect: CGRect) {
         guard
-            let pixelBuffer = currentPixelBuffer,
-            let cache = textureCache,
-            let pipeline = computePipeline,
+            let pixelBuffer   = currentPixelBuffer,
+            let cache         = textureCache,
+            let pipeline      = computePipeline,
             let commandBuffer = commandQueue?.makeCommandBuffer(),
-            let drawable = currentDrawable
+            let drawable      = currentDrawable
         else { return }
 
         let width  = CVPixelBufferGetWidth(pixelBuffer)
@@ -93,28 +127,29 @@ final class MetalPreviewView: MTKView {
         let halfW  = width  / 2
         let halfH  = height / 2
 
-        // Wrap the CVPixelBuffer as a full-res Metal texture (zero-copy).
+        // Invalidate cached textures on resolution change (rare).
+        if (halfW, halfH) != lastHalfSize {
+            pool?.invalidate()
+            lastHalfSize = (halfW, halfH)
+        }
+
+        // Full-res input — zero-copy wrap of the CVPixelBuffer.
         var cvTexture: CVMetalTexture?
         CVMetalTextureCacheCreateTextureFromImage(
             nil, cache, pixelBuffer, nil,
             .bgra8Unorm, width, height, 0, &cvTexture)
-
-        guard
-            let cvTex = cvTexture,
-            let inTexture = CVMetalTextureGetTexture(cvTex)
+        guard let cvTex = cvTexture,
+              let inTexture = CVMetalTextureGetTexture(cvTex)
         else { return }
 
         // ── Pass 1: downsample full-res → half-res ────────────────────────────
-        let halfDesc = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .bgra8Unorm, width: halfW, height: halfH, mipmapped: false)
-        halfDesc.usage = [.shaderRead, .shaderWrite]
-        guard let halfTex = device?.makeTexture(descriptor: halfDesc) else { return }
+        guard let halfTex = pool?.texture(width: halfW, height: halfH, slot: 0) else { return }
 
         if let dp = downsamplePipeline,
            let enc = commandBuffer.makeComputeCommandEncoder() {
             enc.setComputePipelineState(dp)
             enc.setTexture(inTexture, index: 0)
-            enc.setTexture(halfTex,  index: 1)
+            enc.setTexture(halfTex,   index: 1)
             let tw = dp.threadExecutionWidth
             let th = dp.maxTotalThreadsPerThreadgroup / tw
             enc.dispatchThreadgroups(
@@ -123,12 +158,10 @@ final class MetalPreviewView: MTKView {
             enc.endEncoding()
         }
 
-        // ── Pass 2+: Kuwahara on the half-res texture (multi-pass ping-pong) ───
-        let pingDesc = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .bgra8Unorm, width: halfW, height: halfH, mipmapped: false)
-        pingDesc.usage = [.shaderRead, .shaderWrite]
-        guard let pingTex = device?.makeTexture(descriptor: pingDesc),
-              let pongTex = device?.makeTexture(descriptor: pingDesc) else { return }
+        // ── Pass 2+: Kuwahara ping-pong at half-res ───────────────────────────
+        guard let pingTex = pool?.texture(width: halfW, height: halfH, slot: 1),
+              let pongTex = pool?.texture(width: halfW, height: halfH, slot: 2)
+        else { return }
 
         let r = kernelRadius
         var params = KuwaharaParams(
@@ -143,11 +176,10 @@ final class MetalPreviewView: MTKView {
 
         let pingPong: [MTLTexture] = [pingTex, pongTex]
         var inputTex: MTLTexture = halfTex
-
         let tw = pipeline.threadExecutionWidth
         let th = pipeline.maxTotalThreadsPerThreadgroup / tw
-        let threadgroups = MTLSize(width: (halfW + tw - 1) / tw, height: (halfH + th - 1) / th, depth: 1)
-        let threadsPerGroup = MTLSize(width: tw, height: th, depth: 1)
+        let threadgroups     = MTLSize(width: (halfW + tw - 1) / tw, height: (halfH + th - 1) / th, depth: 1)
+        let threadsPerGroup  = MTLSize(width: tw, height: th, depth: 1)
 
         for i in 0..<max(1, passes) {
             let outputTex = pingPong[i % 2]
@@ -162,44 +194,44 @@ final class MetalPreviewView: MTKView {
             inputTex = outputTex
         }
 
-        // ── Register streaming completion handler (must be before commit) ─────
-        // pingTex/pongTex are new allocations each frame, so inputTex is unique
-        // to this command buffer — safe to read in the completion handler.
-        if let callback = onProcessedFrame {
-            let capturedTex = inputTex
-            let pts = currentPresentationTime
-            let capW = halfW, capH = halfH
-            commandBuffer.addCompletedHandler { _ in
-                var pb: CVPixelBuffer?
-                CVPixelBufferCreate(kCFAllocatorDefault, capW, capH,
-                                   kCVPixelFormatType_32BGRA, nil, &pb)
-                guard let pb else { return }
-                CVPixelBufferLockBaseAddress(pb, [])
-                if let base = CVPixelBufferGetBaseAddress(pb) {
-                    capturedTex.getBytes(base,
-                                        bytesPerRow: CVPixelBufferGetBytesPerRow(pb),
-                                        from: MTLRegion(origin: MTLOrigin(x: 0, y: 0, z: 0),
-                                                       size: MTLSize(width: capW, height: capH, depth: 1)),
-                                        mipmapLevel: 0)
+        // ── Streaming: blit final pass → IOSurface-backed buffer (no CPU copy) ─
+        if onProcessedFrame != nil {
+            ensureStreamingBuffer(width: halfW, height: halfH)
+            if let streamTex = streamingTexture,
+               let blit = commandBuffer.makeBlitCommandEncoder() {
+                blit.copy(from: inputTex,
+                          sourceSlice: 0, sourceLevel: 0,
+                          sourceOrigin: .init(x: 0, y: 0, z: 0),
+                          sourceSize:   .init(width: halfW, height: halfH, depth: 1),
+                          to: streamTex,
+                          destinationSlice: 0, destinationLevel: 0,
+                          destinationOrigin: .init(x: 0, y: 0, z: 0))
+                blit.endEncoding()
+            }
+
+            if let callback = onProcessedFrame, let pb = streamingPixelBuffer {
+                let pts = currentPresentationTime
+                commandBuffer.addCompletedHandler { _ in
+                    callback(pb, pts)
                 }
-                CVPixelBufferUnlockBaseAddress(pb, [])
-                callback(pb, pts)
             }
         }
 
-        // ── Blit final pass result → half-res drawable ────────────────────────
+        // ── Display: blit final pass → drawable ───────────────────────────────
         if let blit = commandBuffer.makeBlitCommandEncoder() {
             blit.copy(from: inputTex,
                       sourceSlice: 0, sourceLevel: 0,
-                      sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
-                      sourceSize: MTLSize(width: halfW, height: halfH, depth: 1),
+                      sourceOrigin: .init(x: 0, y: 0, z: 0),
+                      sourceSize:   .init(width: halfW, height: halfH, depth: 1),
                       to: drawable.texture,
                       destinationSlice: 0, destinationLevel: 0,
-                      destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
+                      destinationOrigin: .init(x: 0, y: 0, z: 0))
             blit.endEncoding()
         }
 
         commandBuffer.present(drawable)
         commandBuffer.commit()
+
+        CVMetalTextureCacheFlush(cache, 0)
     }
 }
