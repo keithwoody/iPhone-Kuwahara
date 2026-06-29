@@ -3,20 +3,20 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
-		BD89BCF112404A498A715F22 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F21 /* Assets.xcassets */; };
+		2C20AD4C67D948939E21AD00 /* TexturePool.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C20AD4C67D948939E21AD01 /* TexturePool.swift */; };
+		2C20AD4C67D948939E21AD02 /* TexturePoolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C20AD4C67D948939E21AD03 /* TexturePoolTests.swift */; };
 		BD89BCF112404A498A715F01 /* KuwaharaLiveApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F02 /* KuwaharaLiveApp.swift */; };
 		BD89BCF112404A498A715F03 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F04 /* ContentView.swift */; };
 		BD89BCF112404A498A715F05 /* CameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F06 /* CameraManager.swift */; };
 		BD89BCF112404A498A715F07 /* MetalRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F08 /* MetalRenderer.swift */; };
 		BD89BCF112404A498A715F09 /* SRTStreamer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F0A /* SRTStreamer.swift */; };
 		BD89BCF112404A498A715F0B /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F0C /* Shaders.metal */; };
+		BD89BCF112404A498A715F22 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F21 /* Assets.xcassets */; };
 		BD89BCF1AABB00001234FF03 /* SRTHaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = BD89BCF1AABB00001234FF02 /* SRTHaishinKit */; };
-		2C20AD4C67D948939E21AD00 /* TexturePool.swift in Sources (app) */ = {isa = PBXBuildFile; fileRef = 2C20AD4C67D948939E21AD01 /* TexturePool.swift */; };
-		2C20AD4C67D948939E21AD02 /* TexturePoolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C20AD4C67D948939E21AD03 /* TexturePoolTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,8 +30,8 @@
 		BD89BCF112404A498A715F0A /* SRTStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SRTStreamer.swift; sourceTree = "<group>"; };
 		BD89BCF112404A498A715F0C /* Shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shaders.metal; sourceTree = "<group>"; };
 		BD89BCF112404A498A715F0E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		BD89BCF112404A498A715F21 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BD89BCF112404A498A715F11 /* KuwaharaLive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KuwaharaLive.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BD89BCF112404A498A715F21 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -39,17 +39,26 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BD89BCF1AABB00001234FF03 /* HaishinKit in Frameworks */,
+				BD89BCF1AABB00001234FF03 /* SRTHaishinKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		2C20AD4C67D948939E21AD06 /* KuwaharaLiveTests */ = {
+			isa = PBXGroup;
+			children = (
+				2C20AD4C67D948939E21AD03 /* TexturePoolTests.swift */,
+			);
+			path = KuwaharaLiveTests;
+			sourceTree = "<group>";
+		};
 		BD89BCF112404A498A715F13 = {
 			isa = PBXGroup;
 			children = (
 				BD89BCF112404A498A715F14 /* KuwaharaLive */,
+				2C20AD4C67D948939E21AD06 /* KuwaharaLiveTests */,
 				BD89BCF112404A498A715F15 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -70,14 +79,6 @@
 			path = KuwaharaLive;
 			sourceTree = "<group>";
 		};
-		2C20AD4C67D948939E21AD06 /* KuwaharaLiveTests */ = {
-			isa = PBXGroup;
-			children = (
-				2C20AD4C67D948939E21AD03 /* TexturePoolTests.swift */,
-			);
-			path = KuwaharaLiveTests;
-			sourceTree = "<group>";
-		};
 		BD89BCF112404A498A715F15 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -90,26 +91,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		BD89BCF112404A498A715F16 /* KuwaharaLive */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = BD89BCF112404A498A715F17 /* Build configuration list for PBXNativeTarget "KuwaharaLive" */;
-			buildPhases = (
-				BD89BCF112404A498A715F18 /* Sources */,
-				BD89BCF112404A498A715F12 /* Frameworks */,
-				BD89BCF112404A498A715F19 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			packageProductDependencies = (
-				BD89BCF1AABB00001234FF02 /* HaishinKit */,
-			);
-			name = KuwaharaLive;
-			productName = KuwaharaLive;
-			productReference = BD89BCF112404A498A715F11 /* KuwaharaLive.app */;
-			productType = "com.apple.product-type.application";
-		};
 		2C20AD4C67D948939E21AD07 /* KuwaharaLiveTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2C20AD4C67D948939E21AD0B /* Build configuration list for PBXNativeTarget "KuwaharaLiveTests" */;
@@ -124,6 +105,26 @@
 			productName = KuwaharaLiveTests;
 			productReference = 2C20AD4C67D948939E21AD05 /* KuwaharaLiveTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		BD89BCF112404A498A715F16 /* KuwaharaLive */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BD89BCF112404A498A715F17 /* Build configuration list for PBXNativeTarget "KuwaharaLive" */;
+			buildPhases = (
+				BD89BCF112404A498A715F18 /* Sources */,
+				BD89BCF112404A498A715F12 /* Frameworks */,
+				BD89BCF112404A498A715F19 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KuwaharaLive;
+			packageProductDependencies = (
+				BD89BCF1AABB00001234FF02 /* SRTHaishinKit */,
+			);
+			productName = KuwaharaLive;
+			productReference = BD89BCF112404A498A715F11 /* KuwaharaLive.app */;
+			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
@@ -149,15 +150,15 @@
 				Base,
 			);
 			mainGroup = BD89BCF112404A498A715F13;
+			packageReferences = (
+				BD89BCF1AABB00001234FF01 /* XCLocalSwiftPackageReference "../HaishinKitLocal" */,
+			);
 			productRefGroup = BD89BCF112404A498A715F15 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				BD89BCF112404A498A715F16 /* KuwaharaLive */,
 				2C20AD4C67D948939E21AD07 /* KuwaharaLiveTests */,
-			);
-			packageReferences = (
-				BD89BCF1AABB00001234FF01 /* XCRemoteSwiftPackageReference "HaishinKit.swift" */,
 			);
 		};
 /* End PBXProject section */
@@ -174,20 +175,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		BD89BCF112404A498A715F18 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BD89BCF112404A498A715F01 /* KuwaharaLiveApp.swift in Sources */,
-				BD89BCF112404A498A715F03 /* ContentView.swift in Sources */,
-				BD89BCF112404A498A715F05 /* CameraManager.swift in Sources */,
-				BD89BCF112404A498A715F07 /* MetalRenderer.swift in Sources */,
-				2C20AD4C67D948939E21AD00 /* TexturePool.swift in Sources (app) */,
-				BD89BCF112404A498A715F09 /* SRTStreamer.swift in Sources */,
-				BD89BCF112404A498A715F0B /* Shaders.metal in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		2C20AD4C67D948939E21AD08 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -196,9 +183,59 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BD89BCF112404A498A715F18 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BD89BCF112404A498A715F01 /* KuwaharaLiveApp.swift in Sources */,
+				BD89BCF112404A498A715F03 /* ContentView.swift in Sources */,
+				BD89BCF112404A498A715F05 /* CameraManager.swift in Sources */,
+				BD89BCF112404A498A715F07 /* MetalRenderer.swift in Sources */,
+				2C20AD4C67D948939E21AD00 /* TexturePool.swift in Sources */,
+				BD89BCF112404A498A715F09 /* SRTStreamer.swift in Sources */,
+				BD89BCF112404A498A715F0B /* Shaders.metal in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+		2C20AD4C67D948939E21AD09 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = HGQR3CVHL6;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.keithwoody.KuwaharaLiveTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KuwaharaLive.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/KuwaharaLive";
+			};
+			name = Debug;
+		};
+		2C20AD4C67D948939E21AD0A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = HGQR3CVHL6;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.keithwoody.KuwaharaLiveTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KuwaharaLive.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/KuwaharaLive";
+			};
+			name = Release;
+		};
 		BD89BCF112404A498A715F1D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -373,6 +410,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		2C20AD4C67D948939E21AD0B /* Build configuration list for PBXNativeTarget "KuwaharaLiveTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2C20AD4C67D948939E21AD09 /* Debug */,
+				2C20AD4C67D948939E21AD0A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		BD89BCF112404A498A715F17 /* Build configuration list for PBXNativeTarget "KuwaharaLive" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -391,62 +437,19 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		2C20AD4C67D948939E21AD09 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourteam.KuwaharaLiveTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KuwaharaLive.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/KuwaharaLive";
-			};
-			name = Debug;
-		};
-		2C20AD4C67D948939E21AD0A /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourteam.KuwaharaLiveTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KuwaharaLive.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/KuwaharaLive";
-			};
-			name = Release;
-		};
-		2C20AD4C67D948939E21AD0B /* Build configuration list for PBXNativeTarget "KuwaharaLiveTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				2C20AD4C67D948939E21AD09 /* Debug */,
-				2C20AD4C67D948939E21AD0A /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		BD89BCF1AABB00001234FF01 /* XCLocalSwiftPackageReference "HaishinKit.swift" */ = {
+/* Begin XCLocalSwiftPackageReference section */
+		BD89BCF1AABB00001234FF01 /* XCLocalSwiftPackageReference "../HaishinKitLocal" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = "../HaishinKitLocal";
+			relativePath = ../HaishinKitLocal;
 		};
-/* End XCRemoteSwiftPackageReference section */
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		BD89BCF1AABB00001234FF02 /* SRTHaishinKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = BD89BCF1AABB00001234FF01 /* XCLocalSwiftPackageReference "HaishinKit.swift" */;
+			package = BD89BCF1AABB00001234FF01 /* XCLocalSwiftPackageReference "../HaishinKitLocal" */;
 			productName = SRTHaishinKit;
 		};
 /* End XCSwiftPackageProductDependency section */

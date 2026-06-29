@@ -37,6 +37,8 @@ final class MetalPreviewView: MTKView {
 
     var onProcessedFrame: ((CVPixelBuffer, CMTime) -> Void)?
     var currentPresentationTime: CMTime = .zero
+    // Set once; cleared after the next frame is captured and handed to the callback.
+    var onCaptureFrame: ((CVPixelBuffer) -> Void)?
 
     override init(frame: CGRect, device: MTLDevice?) {
         let gpu = device ?? MTLCreateSystemDefaultDevice()
@@ -194,10 +196,11 @@ final class MetalPreviewView: MTKView {
             inputTex = outputTex
         }
 
-        // ── Streaming: blit final pass → IOSurface-backed buffer (no CPU copy) ─
+        // ── Streaming + capture: blit final pass → IOSurface-backed buffer ──────
         // Always outputs landscape 16:9. In portrait mode, center-crop a 16:9
         // slice from the taller half-res buffer instead of sending the full frame.
-        if onProcessedFrame != nil {
+        let needsSharedBuffer = onProcessedFrame != nil || onCaptureFrame != nil
+        if needsSharedBuffer {
             let isPortrait = halfH > halfW
             let streamW = halfW
             let streamH = isPortrait ? (((halfW * 9 + 15) / 16) / 2) * 2 : halfH
@@ -216,10 +219,14 @@ final class MetalPreviewView: MTKView {
                 blit.endEncoding()
             }
 
-            if let callback = onProcessedFrame, let pb = streamingPixelBuffer {
+            if let pb = streamingPixelBuffer {
+                let streamCallback  = onProcessedFrame
+                let captureCallback = onCaptureFrame
                 let pts = currentPresentationTime
+                if captureCallback != nil { onCaptureFrame = nil }
                 commandBuffer.addCompletedHandler { _ in
-                    callback(pb, pts)
+                    streamCallback?(pb, pts)
+                    captureCallback?(pb)
                 }
             }
         }

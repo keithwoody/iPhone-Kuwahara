@@ -8,6 +8,8 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Saves Kuwahara-filtered stills to your photo library.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Camera access is required to capture video for streaming.</string>
 	<key>NSMicrophoneUsageDescription</key>
