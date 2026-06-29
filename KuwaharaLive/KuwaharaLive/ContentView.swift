@@ -1,5 +1,7 @@
 import SwiftUI
 import AVFoundation
+import Photos
+import CoreImage
 
 struct ContentView: View {
     @StateObject private var camera = CameraManager()
@@ -16,6 +18,9 @@ struct ContentView: View {
     @State private var sharpness: Double = 8.0     // q: 1–18
     @State private var hardness: Double = 8.0      // 1–25
 
+    // Still capture feedback
+    @State private var captureFlash = false
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -30,10 +35,32 @@ struct ContentView: View {
                     hardness: Float(hardness)
                 )
                 .ignoresSafeArea(edges: .top)
-                .overlay(alignment: .bottom) {
-                    if camera.availableSources.count > 1 {
-                        lensPickerView.padding(.bottom, 16)
+                .overlay {
+                    // White flash on capture
+                    if captureFlash {
+                        Color.white.ignoresSafeArea()
+                            .allowsHitTesting(false)
                     }
+                }
+                .overlay(alignment: .bottom) {
+                    HStack(spacing: 0) {
+                        // Lens picker (left-aligned)
+                        if camera.availableSources.count > 1 {
+                            lensPickerView
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        } else {
+                            Spacer()
+                        }
+
+                        // Shutter button (center)
+                        shutterButton
+                            .frame(maxWidth: .infinity)
+
+                        Spacer()
+                            .frame(maxWidth: .infinity)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 16)
                 }
 
                 controlPanel
@@ -41,6 +68,24 @@ struct ContentView: View {
         }
         .onAppear { camera.start() }
         .onDisappear { camera.stop() }
+    }
+
+    // MARK: - Shutter button
+
+    private var shutterButton: some View {
+        Button {
+            capturePhoto()
+        } label: {
+            ZStack {
+                Circle()
+                    .strokeBorder(.white, lineWidth: 3)
+                    .frame(width: 62, height: 62)
+                Circle()
+                    .fill(.white)
+                    .frame(width: 52, height: 52)
+            }
+        }
+        .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
     }
 
     // MARK: - Lens picker overlay
@@ -179,6 +224,35 @@ struct ContentView: View {
         camera.previewView?.onProcessedFrame = nil
         streamer.disconnect()
     }
+
+    // MARK: - Photo capture
+
+    private func capturePhoto() {
+        camera.previewView?.onCaptureFrame = { pixelBuffer in
+            saveFilteredFrame(pixelBuffer)
+        }
+    }
+
+    private func saveFilteredFrame(_ pixelBuffer: CVPixelBuffer) {
+        let ci = CIImage(cvPixelBuffer: pixelBuffer)
+        let ctx = CIContext(options: [.useSoftwareRenderer: false])
+        guard let cg = ctx.createCGImage(ci, from: ci.extent) else { return }
+        let image = UIImage(cgImage: cg)
+
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            guard status == .authorized || status == .limited else { return }
+            PHPhotoLibrary.shared().performChanges({
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
+            }) { _, _ in
+                DispatchQueue.main.async {
+                    withAnimation(.easeOut(duration: 0.08)) { captureFlash = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                        withAnimation(.easeIn(duration: 0.18)) { captureFlash = false }
+                    }
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Reusable thumb-friendly slider row
@@ -204,7 +278,6 @@ private struct KuwaharaSlider: View {
             }
             Slider(value: $value, in: range, step: step)
                 .tint(.purple)
-                // Explicit frame height gives a larger thumb hit-target on small fingers
                 .frame(height: 28)
         }
     }
