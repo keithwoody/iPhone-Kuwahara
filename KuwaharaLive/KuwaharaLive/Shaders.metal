@@ -72,11 +72,14 @@ kernel void kuwahara(
     // Per-sector accumulators.
     //   m[k].rgb = sum of (colour × weight),  m[k].w = sum of weights
     //   s[k]     = sum of (colour² × weight)  — used to compute variance
-    float4 m[8];
-    float3 s[8];
+    // fp16 accumulators: the A15 runs half-precision at ~2× throughput and this
+    // is the hot loop. The variance/combine step below promotes back to float,
+    // where the σ² subtraction is precision-sensitive.
+    half4 m[8];
+    half3 s[8];
     for (int k = 0; k < 8; ++k) {
-        m[k] = float4(0.0f);
-        s[k] = float3(0.0f);
+        m[k] = half4(0.0h);
+        s[k] = half3(0.0h);
     }
 
     // ── Inner neighbourhood loop ──────────────────────────────────────────────
@@ -86,13 +89,13 @@ kernel void kuwahara(
             // Sample the source pixel, clamped to texture borders.
             int2 coord = clamp(int2(gid) + int2(dx, dy),
                                int2(0), int2(width - 1, height - 1));
-            float3 c = saturate(inTexture.read(uint2(coord)).rgb);
+            half3 c = half3(saturate(inTexture.read(uint2(coord)).rgb));
 
             // Look up this offset's 8 precomputed sector weights and accumulate.
             int base = ((dy + kernelRadius) * side + (dx + kernelRadius)) * 8;
             for (int k = 0; k < 8; ++k) {
-                float wk = weights[base + k];
-                m[k] += float4(c * wk, wk);
+                half wk = half(weights[base + k]);
+                m[k] += half4(c * wk, wk);
                 s[k] += c * c * wk;
             }
         }
@@ -105,10 +108,13 @@ kernel void kuwahara(
     // locally most homogeneous neighbourhood.
     float4 output = float4(0.0f);
     for (int k = 0; k < params.N; ++k) {
-        if (m[k].w < 1e-6f) continue;
+        float weight = float(m[k].w);
+        if (weight < 1e-6f) continue;
 
-        m[k].rgb /= m[k].w;
-        float3 variance = abs(s[k] / m[k].w - m[k].rgb * m[k].rgb);
+        // Promote back to float: the accumulation above tolerates half precision,
+        // but the σ² = E[c²] − E[c]² subtraction can lose significant bits.
+        float3 mean     = float3(m[k].rgb) / weight;
+        float3 variance = abs(float3(s[k]) / weight - mean * mean);
         float  sigma2   = variance.r + variance.g + variance.b;
 
         // Weight = 1 / (1 + (hardness × 1000 × σ²)^(q/2))
@@ -116,7 +122,7 @@ kernel void kuwahara(
         // of this suppression.
         float wk = 1.0f / (1.0f + pow(params.hardness * 1000.0f * sigma2,
                                        0.5f * params.q));
-        output += float4(m[k].rgb * wk, wk);
+        output += float4(mean * wk, wk);
     }
 
     outTexture.write(saturate(output / output.w), gid);
