@@ -208,6 +208,10 @@ struct ContentView: View {
 
     private var sharedControlContent: some View {
         VStack(spacing: 0) {
+            if kuwaharaEnabled && effectiveRadius < Int(kernelRadius) {
+                thermalBackoffBanner
+            }
+
             // ── Kuwahara toggle ──────────────────────────────────────────────
             Toggle(isOn: $kuwaharaEnabled) {
                 Label("Kuwahara Filter", systemImage: "paintpalette")
@@ -308,6 +312,36 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Thermal backoff
+    //
+    // Under sustained load the A15 heats up and throttles the GPU, so a radius
+    // the phone renders fine when cool starts dropping frames after a minute.
+    // Rather than let the frame rate sag, cap the *effective* Kuwahara radius —
+    // the dominant cost, ~r² — when the device reports thermal pressure, and
+    // restore it as it cools. The user's chosen radius is untouched; only what
+    // we render is capped. thermalState comes from PerfMonitor, so this view
+    // re-evaluates automatically whenever the OS changes it.
+    private var effectiveRadius: Int {
+        let user = Int(kernelRadius)
+        switch perf.thermalState {
+        case .nominal, .fair: return user
+        case .serious:        return min(user, 7)
+        case .critical:       return min(user, 5)
+        @unknown default:     return user
+        }
+    }
+
+    private var thermalBackoffBanner: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "thermometer.high")
+            Text("Thermal backoff — radius capped to \(effectiveRadius)")
+            Spacer()
+        }
+        .font(.caption2.weight(.medium))
+        .foregroundStyle(.orange)
+        .padding(.vertical, 6)
+    }
+
     // MARK: - Camera preview
 
     private var cameraPreviewView: some View {
@@ -315,7 +349,7 @@ struct ContentView: View {
             camera: camera,
             perfMonitor: perf,
             kuwaharaEnabled: kuwaharaEnabled,
-            kernelRadius: Int(kernelRadius),
+            kernelRadius: effectiveRadius,
             passes: passes,
             sharpness: Float(sharpness),
             hardness: Float(hardness)
