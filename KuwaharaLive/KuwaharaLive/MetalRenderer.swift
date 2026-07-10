@@ -40,6 +40,9 @@ final class MetalPreviewView: MTKView {
     // Set once; cleared after the next frame is captured and handed to the callback.
     var onCaptureFrame: ((CVPixelBuffer) -> Void)?
 
+    // Optional perf sink; when set, every frame reports GPU time + counts.
+    weak var perfMonitor: PerfMonitor?
+
     override init(frame: CGRect, device: MTLDevice?) {
         let gpu = device ?? MTLCreateSystemDefaultDevice()
         super.init(frame: frame, device: gpu)
@@ -241,6 +244,17 @@ final class MetalPreviewView: MTKView {
                       destinationSlice: 0, destinationLevel: 0,
                       destinationOrigin: .init(x: 0, y: 0, z: 0))
             blit.endEncoding()
+        }
+
+        // ── Perf sampling: GPU time + achieved frame rate, every frame ────────
+        // gpuStartTime/gpuEndTime are only valid once the buffer completes, so
+        // read them inside the completion handler (runs on a background thread).
+        if let monitor = perfMonitor {
+            let streamed = onProcessedFrame != nil
+            commandBuffer.addCompletedHandler { cb in
+                let gpuMs = (cb.gpuEndTime - cb.gpuStartTime) * 1000.0
+                monitor.recordFrame(gpuMs: gpuMs, streamed: streamed)
+            }
         }
 
         commandBuffer.present(drawable)

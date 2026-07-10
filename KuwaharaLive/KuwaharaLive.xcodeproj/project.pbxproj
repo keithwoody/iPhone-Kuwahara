@@ -15,6 +15,7 @@
 		BD89BCF112404A498A715F07 /* MetalRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F08 /* MetalRenderer.swift */; };
 		BD89BCF112404A498A715F09 /* SRTStreamer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F0A /* SRTStreamer.swift */; };
 		BD89BCF112404A498A715F0B /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F0C /* Shaders.metal */; };
+		BD89BCF112404A498A715FA0 /* PerfMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715FA1 /* PerfMonitor.swift */; };
 		BD89BCF112404A498A715F22 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BD89BCF112404A498A715F21 /* Assets.xcassets */; };
 		BD89BCF1AABB00001234FF03 /* SRTHaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = BD89BCF1AABB00001234FF02 /* SRTHaishinKit */; };
 /* End PBXBuildFile section */
@@ -29,6 +30,7 @@
 		BD89BCF112404A498A715F08 /* MetalRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetalRenderer.swift; sourceTree = "<group>"; };
 		BD89BCF112404A498A715F0A /* SRTStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SRTStreamer.swift; sourceTree = "<group>"; };
 		BD89BCF112404A498A715F0C /* Shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shaders.metal; sourceTree = "<group>"; };
+		BD89BCF112404A498A715FA1 /* PerfMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerfMonitor.swift; sourceTree = "<group>"; };
 		BD89BCF112404A498A715F0E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		BD89BCF112404A498A715F11 /* KuwaharaLive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KuwaharaLive.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BD89BCF112404A498A715F21 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -73,6 +75,7 @@
 				2C20AD4C67D948939E21AD01 /* TexturePool.swift */,
 				BD89BCF112404A498A715F0A /* SRTStreamer.swift */,
 				BD89BCF112404A498A715F0C /* Shaders.metal */,
+				BD89BCF112404A498A715FA1 /* PerfMonitor.swift */,
 				BD89BCF112404A498A715F0E /* Info.plist */,
 				BD89BCF112404A498A715F21 /* Assets.xcassets */,
 			);
@@ -194,6 +197,7 @@
 				2C20AD4C67D948939E21AD00 /* TexturePool.swift in Sources */,
 				BD89BCF112404A498A715F09 /* SRTStreamer.swift in Sources */,
 				BD89BCF112404A498A715F0B /* Shaders.metal in Sources */,
+				BD89BCF112404A498A715FA0 /* PerfMonitor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

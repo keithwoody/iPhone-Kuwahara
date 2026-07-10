@@ -6,6 +6,10 @@ import CoreImage
 struct ContentView: View {
     @StateObject private var camera = CameraManager()
     @StateObject private var streamer = SRTStreamer()
+    @StateObject private var perf = PerfMonitor()
+
+    // Dev perf HUD toggle; @AppStorage persists it across launches.
+    @AppStorage("showPerfHUD") private var showPerfHUD = false
 
     @State private var host = "192.168.1.20"
     @State private var port = "5000"
@@ -39,6 +43,25 @@ struct ContentView: View {
                 }
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.85), value: controlsCollapsed)
+            .overlay(alignment: .topLeading) {
+                if showPerfHUD {
+                    PerfHUDView(perf: perf)
+                        .padding(.top, 50)
+                        .padding(.leading, 12)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                Button { showPerfHUD.toggle() } label: {
+                    Image(systemName: "speedometer")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(showPerfHUD ? .green : .secondary)
+                        .padding(9)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 46)
+                .padding(.trailing, 12)
+            }
         }
         .ignoresSafeArea()
         .onAppear { camera.start() }
@@ -290,6 +313,7 @@ struct ContentView: View {
     private var cameraPreviewView: some View {
         CameraPreview(
             camera: camera,
+            perfMonitor: perf,
             kuwaharaEnabled: kuwaharaEnabled,
             kernelRadius: Int(kernelRadius),
             passes: passes,
@@ -414,6 +438,7 @@ private struct KuwaharaSlider: View {
 
 struct CameraPreview: UIViewRepresentable {
     let camera: CameraManager
+    let perfMonitor: PerfMonitor
     let kuwaharaEnabled: Bool
     let kernelRadius: Int
     let passes: Int
@@ -423,6 +448,7 @@ struct CameraPreview: UIViewRepresentable {
     func makeUIView(context: Context) -> MetalPreviewView {
         let view = MetalPreviewView()
         camera.previewView = view
+        view.perfMonitor = perfMonitor
         return view
     }
 
@@ -432,5 +458,56 @@ struct CameraPreview: UIViewRepresentable {
         uiView.passes          = passes
         uiView.sharpness       = sharpness
         uiView.hardness        = hardness
+    }
+}
+
+// MARK: - Perf HUD (dev)
+
+private struct PerfHUDView: View {
+    @ObservedObject var perf: PerfMonitor
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            row("GPU",  String(format: "%.1f ms", perf.gpuFrameTimeMs))
+            row("Prev", String(format: "%.0f fps", perf.previewFPS))
+            row("Strm", String(format: "%.0f fps", perf.streamFPS))
+            HStack(spacing: 6) {
+                Text("Therm").foregroundStyle(.secondary).frame(width: 34, alignment: .leading)
+                Circle().fill(perf.thermalState.hudColor).frame(width: 7, height: 7)
+                Text(perf.thermalState.hudLabel).foregroundStyle(perf.thermalState.hudColor)
+            }
+        }
+        .font(.system(size: 11, weight: .medium, design: .monospaced))
+        .foregroundStyle(.white)
+        .padding(8)
+        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func row(_ label: String, _ value: String) -> some View {
+        HStack(spacing: 6) {
+            Text(label).foregroundStyle(.secondary).frame(width: 34, alignment: .leading)
+            Text(value)
+        }
+    }
+}
+
+private extension ProcessInfo.ThermalState {
+    var hudLabel: String {
+        switch self {
+        case .nominal:  return "nominal"
+        case .fair:     return "fair"
+        case .serious:  return "serious"
+        case .critical: return "critical"
+        @unknown default: return "?"
+        }
+    }
+    var hudColor: Color {
+        switch self {
+        case .nominal:  return .green
+        case .fair:     return .yellow
+        case .serious:  return .orange
+        case .critical: return .red
+        @unknown default: return .gray
+        }
     }
 }
