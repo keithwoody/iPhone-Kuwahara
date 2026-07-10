@@ -25,6 +25,7 @@ struct ContentView: View {
 
     // Ephemeral UI state — deliberately not persisted.
     @State private var controlsCollapsed = false
+    @State private var baseZoom: CGFloat = 1.0  // zoom factor at the start of a pinch
 
     @FocusState private var focusedField: Field?
     enum Field { case host, port }
@@ -358,6 +359,24 @@ struct ContentView: View {
             sharpness: Float(sharpness),
             hardness: Float(hardness)
         )
+        // Pinch to zoom. MagnificationGesture reports scale relative to the
+        // gesture start, so multiply by the zoom we had when the pinch began.
+        .gesture(
+            MagnificationGesture()
+                .onChanged { scale in camera.setZoom(baseZoom * scale) }
+                .onEnded { _ in baseZoom = camera.zoomFactor }
+        )
+        .overlay(alignment: .top) {
+            if camera.zoomFactor > 1.01 {
+                Text(String(format: "%.1f×", camera.zoomFactor))
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.black.opacity(0.45), in: Capsule())
+                    .padding(.top, 50)
+            }
+        }
     }
 
     // MARK: - Shutter button
@@ -385,6 +404,7 @@ struct ContentView: View {
             ForEach(camera.availableSources) { source in
                 Button {
                     camera.switchTo(source)
+                    baseZoom = 1.0  // new lens resets zoom
                 } label: {
                     Text(source.label)
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
