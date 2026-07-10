@@ -53,7 +53,7 @@ final class SRTStreamer: ObservableObject {
         // Reset any prior session without racing a fire-and-forget close — the
         // per-attempt close() inside establish() tears the socket down in order.
         lifecycleTask?.cancel()
-        boundCamera?.previewView?.onProcessedFrame = nil
+        boundCamera?.streamHandler = nil
         boundCamera = camera
         hasConnected = false
         health = nil
@@ -65,7 +65,7 @@ final class SRTStreamer: ObservableObject {
     func disconnect() {
         lifecycleTask?.cancel()
         lifecycleTask = nil
-        boundCamera?.previewView?.onProcessedFrame = nil
+        boundCamera?.streamHandler = nil
         let conn = connection
         Task { await conn.close() }
         srtStream = nil
@@ -84,7 +84,7 @@ final class SRTStreamer: ObservableObject {
             let established = await connectWithRetries(host: host, port: port, camera: camera)
             if Task.isCancelled { return }
             guard established else {
-                boundCamera?.previewView?.onProcessedFrame = nil
+                boundCamera?.streamHandler = nil
                 state = .failed("Couldn't reach \(host):\(port)")
                 return
             }
@@ -144,9 +144,10 @@ final class SRTStreamer: ObservableObject {
         try await connection.connect(url)
         await stream.publish()
 
-        // Wire the Metal completion handler to feed frames into the stream.
-        // Capture rate (not self) so the closure is safe on any thread.
-        camera.previewView?.onProcessedFrame = { pixelBuffer, pts in
+        // Wire the frame sink through CameraManager (not the preview view directly)
+        // so it survives the preview view being recreated on rotation. Capture rate
+        // (not self) so the closure is safe on any thread.
+        camera.streamHandler = { pixelBuffer, pts in
             SRTStreamer.submitFrame(pixelBuffer, at: pts, frameRate: rate, to: stream)
         }
     }

@@ -85,10 +85,22 @@ final class MetalPreviewView: MTKView {
     func render(pixelBuffer: CVPixelBuffer) {
         let w = CVPixelBufferGetWidth(pixelBuffer)
         let h = CVPixelBufferGetHeight(pixelBuffer)
-        let targetSize = CGSize(width: w / 2, height: h / 2)
+        let crop = crop16by9(halfW: w / 2, halfH: h / 2)
+        let targetSize = CGSize(width: crop.w, height: crop.h)
         if drawableSize != targetSize { drawableSize = targetSize }
         currentPixelBuffer = pixelBuffer
         draw()
+    }
+
+    /// The 16:9 region of the half-res frame that we actually filter and stream:
+    /// full width, height capped to 16:9 and centered vertically. Landscape is
+    /// already 16:9 (whole frame); portrait is the centered strip — the top/bottom
+    /// we'd crop away never gets filtered. Kept in exact sync with
+    /// CameraManager.currentStreamSize.
+    private func crop16by9(halfW: Int, halfH: Int) -> (w: Int, h: Int, y: Int) {
+        let targetH = ((halfW * 9 + 15) / 16 / 2) * 2   // ceil to 16:9, even
+        if targetH >= halfH { return (halfW, halfH, 0) }
+        return (halfW, targetH, (halfH - targetH) / 2)
     }
 
     /// Builds the per-offset sector-weight table the Kuwahara kernel reads.
@@ -191,13 +203,17 @@ final class MetalPreviewView: MTKView {
 
         let width  = CVPixelBufferGetWidth(pixelBuffer)
         let height = CVPixelBufferGetHeight(pixelBuffer)
-        let halfW  = width  / 2
-        let halfH  = height / 2
 
-        // Invalidate cached textures on resolution change (rare).
-        if (halfW, halfH) != lastHalfSize {
+        // Filter only the 16:9 region we actually stream. In portrait this skips
+        // the top/bottom letterbox we'd crop away anyway (~3× fewer pixels).
+        let crop = crop16by9(halfW: width / 2, halfH: height / 2)
+        let cw = crop.w
+        let ch = crop.h
+
+        // Invalidate cached textures when the processed size changes (orientation).
+        if (cw, ch) != lastHalfSize {
             pool?.invalidate()
-            lastHalfSize = (halfW, halfH)
+            lastHalfSize = (cw, ch)
         }
 
         // Full-res input — zero-copy wrap of the CVPixelBuffer.
@@ -209,25 +225,28 @@ final class MetalPreviewView: MTKView {
               let inTexture = CVMetalTextureGetTexture(cvTex)
         else { return }
 
-        // ── Pass 1: downsample full-res → half-res ────────────────────────────
-        guard let halfTex = pool?.texture(width: halfW, height: halfH, slot: 0) else { return }
+        // ── Pass 1: downsample the 16:9 crop of full-res → crop-sized half-res ─
+        guard let halfTex = pool?.texture(width: cw, height: ch, slot: 0) else { return }
 
         if let dp = downsamplePipeline,
            let enc = commandBuffer.makeComputeCommandEncoder() {
+            // Source origin in full-res coords (crop.y is half-res → ×2).
+            var srcOrigin = SIMD2<UInt32>(0, UInt32(crop.y * 2))
             enc.setComputePipelineState(dp)
             enc.setTexture(inTexture, index: 0)
             enc.setTexture(halfTex,   index: 1)
+            enc.setBytes(&srcOrigin, length: MemoryLayout<SIMD2<UInt32>>.stride, index: 0)
             let tw = dp.threadExecutionWidth
             let th = dp.maxTotalThreadsPerThreadgroup / tw
             enc.dispatchThreadgroups(
-                MTLSize(width: (halfW + tw - 1) / tw, height: (halfH + th - 1) / th, depth: 1),
+                MTLSize(width: (cw + tw - 1) / tw, height: (ch + th - 1) / th, depth: 1),
                 threadsPerThreadgroup: MTLSize(width: tw, height: th, depth: 1))
             enc.endEncoding()
         }
 
-        // ── Pass 2+: Kuwahara ping-pong at half-res ───────────────────────────
-        guard let pingTex = pool?.texture(width: halfW, height: halfH, slot: 1),
-              let pongTex = pool?.texture(width: halfW, height: halfH, slot: 2)
+        // ── Pass 2+: Kuwahara ping-pong over the crop ─────────────────────────
+        guard let pingTex = pool?.texture(width: cw, height: ch, slot: 1),
+              let pongTex = pool?.texture(width: cw, height: ch, slot: 2)
         else { return }
 
         let r = kernelRadius
@@ -246,7 +265,7 @@ final class MetalPreviewView: MTKView {
         var inputTex: MTLTexture = halfTex
         let tw = pipeline.threadExecutionWidth
         let th = pipeline.maxTotalThreadsPerThreadgroup / tw
-        let threadgroups     = MTLSize(width: (halfW + tw - 1) / tw, height: (halfH + th - 1) / th, depth: 1)
+        let threadgroups     = MTLSize(width: (cw + tw - 1) / tw, height: (ch + th - 1) / th, depth: 1)
         let threadsPerGroup  = MTLSize(width: tw, height: th, depth: 1)
 
         for i in 0..<max(1, passes) {
@@ -268,18 +287,14 @@ final class MetalPreviewView: MTKView {
         // slice from the taller half-res buffer instead of sending the full frame.
         let needsSharedBuffer = onProcessedFrame != nil || onCaptureFrame != nil
         if needsSharedBuffer {
-            let isPortrait = halfH > halfW
-            let streamW = halfW
-            let streamH = isPortrait ? (((halfW * 9 + 15) / 16) / 2) * 2 : halfH
-            let streamYOffset = isPortrait ? (halfH - streamH) / 2 : 0
-
-            ensureStreamingBuffer(width: streamW, height: streamH)
+            // inputTex is already the 16:9 crop, so stream it whole.
+            ensureStreamingBuffer(width: cw, height: ch)
             if let streamTex = streamingTexture,
                let blit = commandBuffer.makeBlitCommandEncoder() {
                 blit.copy(from: inputTex,
                           sourceSlice: 0, sourceLevel: 0,
-                          sourceOrigin: .init(x: 0, y: streamYOffset, z: 0),
-                          sourceSize:   .init(width: streamW, height: streamH, depth: 1),
+                          sourceOrigin: .init(x: 0, y: 0, z: 0),
+                          sourceSize:   .init(width: cw, height: ch, depth: 1),
                           to: streamTex,
                           destinationSlice: 0, destinationLevel: 0,
                           destinationOrigin: .init(x: 0, y: 0, z: 0))
@@ -303,7 +318,7 @@ final class MetalPreviewView: MTKView {
             blit.copy(from: inputTex,
                       sourceSlice: 0, sourceLevel: 0,
                       sourceOrigin: .init(x: 0, y: 0, z: 0),
-                      sourceSize:   .init(width: halfW, height: halfH, depth: 1),
+                      sourceSize:   .init(width: cw, height: ch, depth: 1),
                       to: drawable.texture,
                       destinationSlice: 0, destinationLevel: 0,
                       destinationOrigin: .init(x: 0, y: 0, z: 0))

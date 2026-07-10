@@ -66,7 +66,22 @@ final class CameraManager: NSObject, ObservableObject {
     }
     private(set) var frameRate: Int = 30
 
-    weak var previewView: MetalPreviewView?
+    /// While true, orientation changes are ignored so the capture frame size can't
+    /// change mid-stream (a fixed-size encoder crashes on a resized frame). Set by
+    /// the UI when a stream is active; on unlock we resync to the current orientation.
+    var orientationLocked = false {
+        didSet { if !orientationLocked { handleOrientationChange() } }
+    }
+
+    weak var previewView: MetalPreviewView? {
+        didSet { previewView?.onProcessedFrame = streamHandler }
+    }
+    /// The stream's frame sink. Stored here (not directly on previewView) so it
+    /// survives the preview view being recreated on layout/orientation changes:
+    /// it's re-applied whenever previewView is reassigned or the handler changes.
+    var streamHandler: ((CVPixelBuffer, CMTime) -> Void)? {
+        didSet { previewView?.onProcessedFrame = streamHandler }
+    }
     var onFrame: ((CVPixelBuffer) -> Void)?
 
     override init() {
@@ -171,6 +186,7 @@ final class CameraManager: NSObject, ObservableObject {
     // MARK: - Orientation
 
     @objc private func handleOrientationChange() {
+        guard !orientationLocked else { return }
         let orientation = UIDevice.current.orientation
         guard orientation.isValidInterfaceOrientation else { return }
         if let connection = videoOutput.connection(with: .video) {

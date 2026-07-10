@@ -76,6 +76,11 @@ struct ContentView: View {
             streamer.frameRate = frameRate
         }
         .onDisappear { camera.stop() }
+        .onChange(of: streamer.state) { _ in
+            // Lock capture orientation while a stream is active — the encoder's
+            // frame size is fixed at connect, so a mid-stream rotation would crash it.
+            camera.orientationLocked = isStreaming
+        }
     }
 
     // MARK: - Landscape: camera left 2/3, controls right 1/3
@@ -359,6 +364,9 @@ struct ContentView: View {
             sharpness: Float(sharpness),
             hardness: Float(hardness)
         )
+        // The drawable is now exactly the 16:9 region we filter/stream, so pin the
+        // view to 16:9 (WYSIWYG). In portrait this becomes a letterboxed 16:9 box.
+        .aspectRatio(16.0 / 9.0, contentMode: .fit)
         // Pinch to zoom. MagnificationGesture reports scale relative to the
         // gesture start, so multiply by the zoom we had when the pinch began.
         .gesture(
