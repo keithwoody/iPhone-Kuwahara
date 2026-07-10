@@ -20,6 +20,9 @@ final class MetalPreviewView: MTKView {
     private var downsamplePipeline: MTLComputePipelineState?
     private var textureCache: CVMetalTextureCache?
     private var pool: TexturePool?
+    // Precomputed per-offset Kuwahara sector weights; rebuilt only when radius changes.
+    private var weightBuffer: MTLBuffer?
+    private var weightBufferRadius: Int = -1
     private var currentPixelBuffer: CVPixelBuffer?
     private var lastHalfSize: (Int, Int) = (0, 0)
 
@@ -86,6 +89,65 @@ final class MetalPreviewView: MTKView {
         if drawableSize != targetSize { drawableSize = targetSize }
         currentPixelBuffer = pixelBuffer
         draw()
+    }
+
+    /// Builds the per-offset sector-weight table the Kuwahara kernel reads.
+    /// The weights depend only on the radius (and fixed shape constants), so we
+    /// rebuild only when the radius changes — never per frame. This mirrors the
+    /// polynomial + Gaussian math that used to run per-pixel in the shader.
+    private func ensureWeightBuffer(radius: Int) {
+        guard radius > 0, radius != weightBufferRadius, let gpu = device else { return }
+
+        let side  = 2 * radius + 1
+        let count = side * side
+        var weights = [Float](repeating: 0, count: count * 8)
+
+        let zeta: Float      = 2.0 / Float(radius)
+        let zeroCross: Float = 0.58
+        let sinZC = sin(zeroCross)
+        let eta   = (zeta + cos(zeroCross)) / (sinZC * sinZC)
+        let s2    = Float(2.0).squareRoot() / 2.0
+
+        func sq(_ x: Float) -> Float { let z = max(0, x); return z * z }
+
+        var idx = 0
+        for dy in -radius...radius {
+            for dx in -radius...radius {
+                let vx = Float(dx) / Float(radius)
+                let vy = Float(dy) / Float(radius)
+
+                // Axis-aligned sectors (0, 2, 4, 6).
+                var vxx = zeta - eta * vx * vx
+                var vyy = zeta - eta * vy * vy
+                var w = [Float](repeating: 0, count: 8)
+                w[0] = sq( vy + vxx)
+                w[2] = sq(-vx + vyy)
+                w[4] = sq(-vy + vxx)
+                w[6] = sq( vx + vyy)
+
+                // Diagonal sectors (1, 3, 5, 7): same polynomials on a 45°-rotated v.
+                let rx = s2 * (vx - vy)
+                let ry = s2 * (vx + vy)
+                vxx = zeta - eta * rx * rx
+                vyy = zeta - eta * ry * ry
+                w[1] = sq( ry + vxx)
+                w[3] = sq(-rx + vyy)
+                w[5] = sq(-ry + vxx)
+                w[7] = sq( rx + vyy)
+
+                let sumW = w.reduce(0, +)
+                if sumW >= 1e-6 {
+                    let g = exp(-3.125 * (vx * vx + vy * vy)) / sumW
+                    for k in 0..<8 { weights[idx * 8 + k] = w[k] * g }
+                }
+                idx += 1
+            }
+        }
+
+        weightBuffer = gpu.makeBuffer(bytes: weights,
+                                      length: weights.count * MemoryLayout<Float>.stride,
+                                      options: .storageModeShared)
+        weightBufferRadius = radius
     }
 
     // Builds (or rebuilds) the IOSurface-backed streaming buffer + wrapped MTLTexture.
@@ -169,6 +231,7 @@ final class MetalPreviewView: MTKView {
         else { return }
 
         let r = kernelRadius
+        ensureWeightBuffer(radius: r)
         var params = KuwaharaParams(
             kernelRadius: Int32(r),
             N:            8,
@@ -193,6 +256,7 @@ final class MetalPreviewView: MTKView {
                 enc.setTexture(inputTex,  index: 0)
                 enc.setTexture(outputTex, index: 1)
                 enc.setBytes(&params, length: MemoryLayout<KuwaharaParams>.stride, index: 0)
+                enc.setBuffer(weightBuffer, offset: 0, index: 1)
                 enc.dispatchThreadgroups(threadgroups, threadsPerThreadgroup: threadsPerGroup)
                 enc.endEncoding()
             }

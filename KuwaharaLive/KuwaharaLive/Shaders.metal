@@ -22,6 +22,15 @@
  *   sectors based on its angular position. The final output blends all 8 sector
  *   means, weighted so that sectors with lower variance contribute more heavily.
  *   This eliminates block artifacts and gives a fluid, oil-painting quality.
+ *
+ * Performance note:
+ *   The per-sample sector weights depend only on the kernel *offset* (dx, dy)
+ *   and the radius — never on the pixel or its colour. So instead of recomputing
+ *   the 8 polynomials + Gaussian for every one of the ~500k pixels each frame,
+ *   they are precomputed once (whenever the radius changes) into `weights`, laid
+ *   out as [(2r+1)² samples] × [8 sectors]. See MetalRenderer.ensureWeightBuffer.
+ *   The inner loop then just reads a weight and accumulates — same output, far
+ *   less ALU.
  */
 
 #include <metal_stdlib>
@@ -43,6 +52,7 @@ kernel void kuwahara(
     texture2d<float, access::read>  inTexture  [[texture(0)]],
     texture2d<float, access::write> outTexture [[texture(1)]],
     constant KuwaharaParams&        params     [[buffer(0)]],
+    constant float*                 weights    [[buffer(1)]],  // precomputed w[k]·gaussian, [(2r+1)²][8]
     uint2 gid [[thread_position_in_grid]])
 {
     const uint width  = inTexture.get_width();
@@ -56,14 +66,8 @@ kernel void kuwahara(
         return;
     }
 
-    const int   kernelRadius = params.kernelRadius;
-    const float zeta         = params.zeta;
-    const float zeroCross    = params.zeroCrossing;
-    const float sinZC        = sin(zeroCross);
-
-    // eta controls how quickly the polynomial weight drops at sector boundaries.
-    // Derived from zeroCrossing so that the weight is exactly zero at ±zeroCross.
-    const float eta = (zeta + cos(zeroCross)) / (sinZC * sinZC);
+    const int kernelRadius = params.kernelRadius;
+    const int side         = 2 * kernelRadius + 1;  // weight-table row stride
 
     // Per-sector accumulators.
     //   m[k].rgb = sum of (colour × weight),  m[k].w = sum of weights
@@ -79,61 +83,15 @@ kernel void kuwahara(
     for (int dy = -kernelRadius; dy <= kernelRadius; ++dy) {
         for (int dx = -kernelRadius; dx <= kernelRadius; ++dx) {
 
-            // Normalised position within the kernel: maps [-kernelRadius,+kernelRadius] → [-1,+1].
-            float2 v = float2(dx, dy) / float(kernelRadius);
-
             // Sample the source pixel, clamped to texture borders.
             int2 coord = clamp(int2(gid) + int2(dx, dy),
                                int2(0), int2(width - 1, height - 1));
             float3 c = saturate(inTexture.read(uint2(coord)).rgb);
 
-            // ── Polynomial sector weights ─────────────────────────────────────
-            // We evaluate 8 polynomial "bump" functions, one per sector.
-            // Each bump peaks in one sector direction and falls to zero at the
-            // sector boundaries defined by zeroCrossing.
-            //
-            // Sectors 0,2,4,6 are aligned to the cardinal axes (+y, -x, -y, +x).
-            // Sectors 1,3,5,7 are the same set rotated 45°.
-            //
-            // For a vector v = (vx, vy) in the normalised kernel, the weight
-            // for a sector centred on the +y axis is:
-            //   z = max(0, vy + (zeta - eta * vx²))
-            //   w = z²
-            // (A cosine-like polynomial that is positive only in the +y half-plane
-            //  and tapers to zero near the sector edges.)
-
-            float w[8];
-            float sumW = 0.0f;
-            float z, vxx, vyy;
-
-            // Axis-aligned sectors (0, 2, 4, 6)
-            vxx = zeta - eta * v.x * v.x;
-            vyy = zeta - eta * v.y * v.y;
-            z = max(0.0f,  v.y + vxx); w[0] = z * z; sumW += w[0]; // +y sector
-            z = max(0.0f, -v.x + vyy); w[2] = z * z; sumW += w[2]; // -x sector
-            z = max(0.0f, -v.y + vxx); w[4] = z * z; sumW += w[4]; // -y sector
-            z = max(0.0f,  v.x + vyy); w[6] = z * z; sumW += w[6]; // +x sector
-
-            // Diagonal sectors (1, 3, 5, 7): same polynomials on a 45°-rotated v.
-            // The rotation preserves magnitude so the Gaussian below is unaffected.
-            float2 vr = (sqrt(2.0f) / 2.0f) * float2(v.x - v.y, v.x + v.y);
-            vxx = zeta - eta * vr.x * vr.x;
-            vyy = zeta - eta * vr.y * vr.y;
-            z = max(0.0f,  vr.y + vxx); w[1] = z * z; sumW += w[1];
-            z = max(0.0f, -vr.x + vyy); w[3] = z * z; sumW += w[3];
-            z = max(0.0f, -vr.y + vxx); w[5] = z * z; sumW += w[5];
-            z = max(0.0f,  vr.x + vyy); w[7] = z * z; sumW += w[7];
-
-            if (sumW < 1e-6f) continue;
-
-            // Gaussian roll-off: distant samples (large |v|) contribute less
-            // regardless of which sector they land in. The constant 3.125 gives
-            // a standard deviation of ~0.4 in normalised kernel space.
-            float g = exp(-3.125f * dot(v, v)) / sumW;
-
-            // Accumulate weighted colour and colour-squared into each sector.
+            // Look up this offset's 8 precomputed sector weights and accumulate.
+            int base = ((dy + kernelRadius) * side + (dx + kernelRadius)) * 8;
             for (int k = 0; k < 8; ++k) {
-                float wk = w[k] * g;
+                float wk = weights[base + k];
                 m[k] += float4(c * wk, wk);
                 s[k] += c * c * wk;
             }
