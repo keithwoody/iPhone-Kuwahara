@@ -24,7 +24,6 @@ struct ContentView: View {
     @AppStorage("frameRate") private var frameRate: Int = 30
 
     // Ephemeral UI state — deliberately not persisted.
-    @State private var isStreaming = false
     @State private var controlsCollapsed = false
 
     @FocusState private var focusedField: Field?
@@ -311,12 +310,7 @@ struct ContentView: View {
                 .tint(isStreaming ? .red : .blue)
                 .disabled(host.isEmpty)
 
-                if let status = streamer.statusMessage {
-                    Text(status)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
+                streamStatusView
             }
             .padding(.top, 12)
         }
@@ -410,16 +404,63 @@ struct ContentView: View {
 
     // MARK: - Stream control
 
+    // Derived from the streamer's state machine — "streaming" covers everything
+    // except idle/failed, so the button offers Stop (to abort) while reconnecting.
+    private var isStreaming: Bool {
+        switch streamer.state {
+        case .idle, .failed:                     return false
+        case .connecting, .live, .reconnecting:  return true
+        }
+    }
+
     private func startStream() {
         guard let portNum = UInt16(port) else { return }
-        isStreaming = true
         streamer.connect(host: host, port: portNum, camera: camera)
     }
 
     private func stopStream() {
-        isStreaming = false
-        camera.previewView?.onProcessedFrame = nil
         streamer.disconnect()
+    }
+
+    // MARK: - Stream status
+
+    @ViewBuilder
+    private var streamStatusView: some View {
+        switch streamer.state {
+        case .idle:
+            EmptyView()
+        case .connecting:
+            Label("Connecting…", systemImage: "antenna.radiowaves.left.and.right")
+                .font(.caption).foregroundStyle(.secondary)
+        case .reconnecting(let attempt):
+            Label("Reconnecting… (\(attempt)/5)", systemImage: "arrow.clockwise")
+                .font(.caption.weight(.medium)).foregroundStyle(.orange)
+        case .failed(let reason):
+            Label(reason, systemImage: "exclamationmark.triangle.fill")
+                .font(.caption).foregroundStyle(.red)
+                .multilineTextAlignment(.center)
+        case .live:
+            VStack(spacing: 5) {
+                Label("Live", systemImage: "dot.radiowaves.left.and.right")
+                    .font(.caption.weight(.semibold)).foregroundStyle(.green)
+                if let h = streamer.health {
+                    HStack(spacing: 14) {
+                        statCell("Mbps", String(format: "%.1f", h.mbps))
+                        statCell("Drops", "\(h.drops)")
+                        statCell("Retrans", "\(h.retransmits)")
+                        statCell("Pkts", "\(h.pktsSent)")
+                    }
+                }
+            }
+        }
+    }
+
+    private func statCell(_ label: String, _ value: String) -> some View {
+        VStack(spacing: 1) {
+            Text(value).foregroundStyle(.primary)
+            Text(label).foregroundStyle(.secondary)
+        }
+        .font(.system(size: 10, weight: .medium, design: .monospaced))
     }
 
     // MARK: - Photo capture
