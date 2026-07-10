@@ -11,17 +11,21 @@ struct ContentView: View {
     // Dev perf HUD toggle; @AppStorage persists it across launches.
     @AppStorage("showPerfHUD") private var showPerfHUD = false
 
-    @State private var host = "192.168.1.20"
-    @State private var port = "5000"
+    // Persisted across launches via UserDefaults. @AppStorage hands back a
+    // Binding, so the sliders/fields below bind to these exactly as before.
+    @AppStorage("host") private var host = "192.168.1.20"
+    @AppStorage("port") private var port = "5000"
+
+    @AppStorage("kuwaharaEnabled") private var kuwaharaEnabled = true
+    @AppStorage("kernelRadius") private var kernelRadius: Double = 9
+    @AppStorage("passes") private var passes: Int = 1
+    @AppStorage("sharpness") private var sharpness: Double = 8.0
+    @AppStorage("hardness") private var hardness: Double = 8.0
+    @AppStorage("frameRate") private var frameRate: Int = 30
+
+    // Ephemeral UI state — deliberately not persisted.
     @State private var isStreaming = false
     @State private var controlsCollapsed = false
-
-    @State private var kuwaharaEnabled = true
-    @State private var kernelRadius: Double = 9
-    @State private var passes: Int = 1
-    @State private var sharpness: Double = 8.0
-    @State private var hardness: Double = 8.0
-    @State private var frameRate: Int = 30
 
     @FocusState private var focusedField: Field?
     enum Field { case host, port }
@@ -64,7 +68,13 @@ struct ContentView: View {
             }
         }
         .ignoresSafeArea()
-        .onAppear { camera.start() }
+        .onAppear {
+            camera.start()
+            // Frame rate is applied via .onChange, which does NOT fire for the
+            // restored launch value — so push it to the camera/streamer here.
+            camera.setFrameRate(frameRate)
+            streamer.frameRate = frameRate
+        }
         .onDisappear { camera.stop() }
     }
 
