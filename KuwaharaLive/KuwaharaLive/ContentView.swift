@@ -25,6 +25,7 @@ struct ContentView: View {
 
     // Ephemeral UI state — deliberately not persisted.
     @State private var controlsCollapsed = false
+    @State private var baseZoom: CGFloat = 1.0  // zoom factor at the start of a pinch
 
     @FocusState private var focusedField: Field?
     enum Field { case host, port }
@@ -75,6 +76,11 @@ struct ContentView: View {
             streamer.frameRate = frameRate
         }
         .onDisappear { camera.stop() }
+        .onChange(of: streamer.state) { _ in
+            // Lock capture orientation while a stream is active — the encoder's
+            // frame size is fixed at connect, so a mid-stream rotation would crash it.
+            camera.orientationLocked = isStreaming
+        }
     }
 
     // MARK: - Landscape: camera left 2/3, controls right 1/3
@@ -358,6 +364,27 @@ struct ContentView: View {
             sharpness: Float(sharpness),
             hardness: Float(hardness)
         )
+        // The drawable is now exactly the 16:9 region we filter/stream, so pin the
+        // view to 16:9 (WYSIWYG). In portrait this becomes a letterboxed 16:9 box.
+        .aspectRatio(16.0 / 9.0, contentMode: .fit)
+        // Pinch to zoom. MagnificationGesture reports scale relative to the
+        // gesture start, so multiply by the zoom we had when the pinch began.
+        .gesture(
+            MagnificationGesture()
+                .onChanged { scale in camera.setZoom(baseZoom * scale) }
+                .onEnded { _ in baseZoom = camera.zoomFactor }
+        )
+        .overlay(alignment: .top) {
+            if camera.zoomFactor > 1.01 {
+                Text(String(format: "%.1f×", camera.zoomFactor))
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.black.opacity(0.45), in: Capsule())
+                    .padding(.top, 50)
+            }
+        }
     }
 
     // MARK: - Shutter button
@@ -385,6 +412,7 @@ struct ContentView: View {
             ForEach(camera.availableSources) { source in
                 Button {
                     camera.switchTo(source)
+                    baseZoom = 1.0  // new lens resets zoom
                 } label: {
                     Text(source.label)
                         .font(.system(size: 13, weight: .semibold, design: .rounded))

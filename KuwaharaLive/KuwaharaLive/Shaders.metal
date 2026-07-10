@@ -139,12 +139,13 @@ kernel void kuwahara(
 // ─────────────────────────────────────────────────────────────────────────────
 
 kernel void downsample_2x(
-    texture2d<float, access::read>  src [[texture(0)]],
-    texture2d<float, access::write> dst [[texture(1)]],
+    texture2d<float, access::read>  src       [[texture(0)]],
+    texture2d<float, access::write> dst       [[texture(1)]],
+    constant uint2&                 srcOrigin [[buffer(0)]],  // full-res origin of the crop
     uint2 gid [[thread_position_in_grid]])
 {
     if (gid.x >= dst.get_width() || gid.y >= dst.get_height()) return;
-    uint2 s = gid * 2;
+    uint2 s = srcOrigin + gid * 2;
     float4 c = src.read(s)
              + src.read(s + uint2(1, 0))
              + src.read(s + uint2(0, 1))

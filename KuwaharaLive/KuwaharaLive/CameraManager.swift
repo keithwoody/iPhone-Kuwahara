@@ -51,6 +51,8 @@ final class CameraManager: NSObject, ObservableObject {
     @Published var availableSources: [CameraSource] = []
     @Published var currentSource: CameraSource?
     @Published var currentHalfResSize: CGSize = CGSize(width: 960, height: 540)
+    @Published private(set) var zoomFactor: CGFloat = 1.0
+    private let maxZoomFactor: CGFloat = 5.0
 
     // Always 16:9 landscape (the dimensions the stream encoder will see).
     var currentStreamSize: CGSize {
@@ -64,7 +66,22 @@ final class CameraManager: NSObject, ObservableObject {
     }
     private(set) var frameRate: Int = 30
 
-    weak var previewView: MetalPreviewView?
+    /// While true, orientation changes are ignored so the capture frame size can't
+    /// change mid-stream (a fixed-size encoder crashes on a resized frame). Set by
+    /// the UI when a stream is active; on unlock we resync to the current orientation.
+    var orientationLocked = false {
+        didSet { if !orientationLocked { handleOrientationChange() } }
+    }
+
+    weak var previewView: MetalPreviewView? {
+        didSet { previewView?.onProcessedFrame = streamHandler }
+    }
+    /// The stream's frame sink. Stored here (not directly on previewView) so it
+    /// survives the preview view being recreated on layout/orientation changes:
+    /// it's re-applied whenever previewView is reassigned or the handler changes.
+    var streamHandler: ((CVPixelBuffer, CMTime) -> Void)? {
+        didSet { previewView?.onProcessedFrame = streamHandler }
+    }
     var onFrame: ((CVPixelBuffer) -> Void)?
 
     override init() {
@@ -123,11 +140,26 @@ final class CameraManager: NSObject, ObservableObject {
         session.commitConfiguration()
 
         applyFrameRate(to: source?.device)
+        zoomFactor = 1.0  // a newly configured device starts un-zoomed
     }
 
     func setFrameRate(_ fps: Int) {
         frameRate = fps
         applyFrameRate(to: currentSource?.device)
+    }
+
+    /// Digital zoom via the sensor/ISP (`AVCaptureDevice.videoZoomFactor`),
+    /// clamped to [1, min(device max, cap)]. Note: this crops into the sensor and
+    /// scales back to the same buffer size, so the delivered frame — and thus the
+    /// filter cost — is unchanged (the pixel-savings comes later, in the pipeline).
+    func setZoom(_ factor: CGFloat) {
+        guard let device = currentSource?.device,
+              (try? device.lockForConfiguration()) != nil else { return }
+        let maxZoom = min(device.activeFormat.videoMaxZoomFactor, maxZoomFactor)
+        let clamped = max(1.0, min(factor, maxZoom))
+        device.videoZoomFactor = clamped
+        device.unlockForConfiguration()
+        zoomFactor = clamped
     }
 
     private func applyFrameRate(to device: AVCaptureDevice?) {
@@ -154,6 +186,7 @@ final class CameraManager: NSObject, ObservableObject {
     // MARK: - Orientation
 
     @objc private func handleOrientationChange() {
+        guard !orientationLocked else { return }
         let orientation = UIDevice.current.orientation
         guard orientation.isValidInterfaceOrientation else { return }
         if let connection = videoOutput.connection(with: .video) {
